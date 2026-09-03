@@ -15,7 +15,8 @@ type ReloadListener func(oldCfg, newCfg *GatewayConfig)
 type ConfigHolder struct {
 	ptr       atomic.Pointer[GatewayConfig]
 	mu        sync.Mutex
-	listeners []ReloadListener
+	nextSubID uint64
+	listeners map[uint64]ReloadListener
 }
 
 // NewConfigHolder initializes a new ConfigHolder with an initial configuration.
@@ -23,7 +24,9 @@ func NewConfigHolder(initialCfg *GatewayConfig) *ConfigHolder {
 	if initialCfg == nil {
 		panic("initial configuration cannot be nil")
 	}
-	h := &ConfigHolder{}
+	h := &ConfigHolder{
+		listeners: make(map[uint64]ReloadListener),
+	}
 	h.ptr.Store(initialCfg)
 	return h
 }
@@ -45,16 +48,18 @@ func (h *ConfigHolder) Swap(newCfg *GatewayConfig) (*GatewayConfig, error) {
 	h.mu.Lock()
 	oldCfg := h.ptr.Swap(newCfg)
 
-	// Copy listeners under lock to prevent concurrent slice modification
-	listenersCopy := make([]ReloadListener, len(h.listeners))
-	copy(listenersCopy, h.listeners)
+	// Copy listeners under lock to prevent concurrent map modification
+	listenersCopy := make([]ReloadListener, 0, len(h.listeners))
+	for _, fn := range h.listeners {
+		if fn != nil {
+			listenersCopy = append(listenersCopy, fn)
+		}
+	}
 	h.mu.Unlock()
 
 	// Execute callbacks outside lock
 	for _, fn := range listenersCopy {
-		if fn != nil {
-			fn(oldCfg, newCfg)
-		}
+		fn(oldCfg, newCfg)
 	}
 
 	return oldCfg, nil
@@ -69,18 +74,18 @@ func (h *ConfigHolder) Subscribe(fn ReloadListener) func() {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.listeners = append(h.listeners, fn)
+
+	if h.listeners == nil {
+		h.listeners = make(map[uint64]ReloadListener)
+	}
+	h.nextSubID++
+	id := h.nextSubID
+	h.listeners[id] = fn
 
 	return func() {
 		h.mu.Lock()
 		defer h.mu.Unlock()
-		for i, l := range h.listeners {
-			// Find and remove listener by pointer
-			if &l == &fn {
-				h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
-				break
-			}
-		}
+		delete(h.listeners, id)
 	}
 }
 
@@ -105,15 +110,17 @@ func (h *ConfigHolder) Update(mutator func(candidate *GatewayConfig) error) (*Ga
 	oldCfg := h.ptr.Swap(candidate)
 
 	// Copy and dispatch listeners
-	listenersCopy := make([]ReloadListener, len(h.listeners))
-	copy(listenersCopy, h.listeners)
+	listenersCopy := make([]ReloadListener, 0, len(h.listeners))
+	for _, fn := range h.listeners {
+		if fn != nil {
+			listenersCopy = append(listenersCopy, fn)
+		}
+	}
 
 	// Dispatch in background or after releasing lock if called via Update
 	go func() {
 		for _, fn := range listenersCopy {
-			if fn != nil {
-				fn(oldCfg, candidate)
-			}
+			fn(oldCfg, candidate)
 		}
 	}()
 
