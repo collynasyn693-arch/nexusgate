@@ -1,0 +1,35 @@
+# Ignore everything by default in home directory
+/*
+
+# Explicitly whitelist NexusGate project assets
+!/cmd/
+!/cmd/**
+!/pkg/
+!/pkg/**
+!/internal/
+!/internal/**
+!/docs/
+!/docs/**
+!/scripts/
+!/scripts/**
+!/test/
+!/test/**
+!/examples/
+!/examples/**
+!/go.mod
+!/go.sum
+!/.gitignore
+!/MASTER_PLAN.md
+!/README.md
+!/CHANGELOG.md
+!/RELEASE_NOTES.md
+!/nexusgate.example.yaml
+
+# Ignore build binaries and test artifacts
+*.test
+*.out
+*.exe
+nexusgate
+.DS_Store
+*.swp
+*~
