@@ -6,9 +6,15 @@ import (
 	"testing"
 )
 
+type testHandler struct {
+	tag string
+}
+
+func (th *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, p Params) {}
+
 // dummyHandler creates a simple Handler for testing.
 func dummyHandler(tag string) Handler {
-	return HandlerFunc(func(w http.ResponseWriter, r *http.Request, p Params) {})
+	return &testHandler{tag: tag}
 }
 
 func TestStaticRouteInsertionBasic(t *testing.T) {
