@@ -38,6 +38,15 @@ walk:
 			if curr.handler != nil {
 				return curr.handler, true
 			}
+			if curr.catchChild != nil && curr.catchChild.handler != nil {
+				if params != nil {
+					*params = append(*params, Param{
+						Key:   curr.catchChild.paramKey,
+						Value: "",
+					})
+				}
+				return curr.catchChild.handler, true
+			}
 			break
 		}
 
