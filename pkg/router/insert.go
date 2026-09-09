@@ -191,6 +191,9 @@ func (n *node) AddRoute(path string, handler Handler) error {
 			}
 		} else if isCatchAll {
 			// Catch-all segment: must be terminal
+			if slashIdx := strings.IndexByte(remaining, '/'); slashIdx >= 0 {
+				return ErrInvalidCatchAll
+			}
 			catchAllName := remaining[1:] // strip '*'
 			if len(catchAllName) == 0 || strings.ContainsAny(catchAllName, "/*:") {
 				return ErrEmptyWildcardName

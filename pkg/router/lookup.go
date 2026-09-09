@@ -5,6 +5,7 @@ type backtrackFrame struct {
 	n        *node
 	path     string
 	paramLen int
+	altType  NodeType // NodeParam or NodeCatchAll
 }
 
 // Lookup searches the radix trie rooted at n for a handler matching the given path.
@@ -41,36 +42,57 @@ walk:
 		}
 
 		c := searchPath[0]
-
-		// If current node has alternative dynamic branches, push a backtrack checkpoint
-		if (curr.paramChild != nil || curr.catchChild != nil) && stackIdx < len(stack) {
-			paramLen := 0
-			if params != nil {
-				paramLen = len(*params)
-			}
-			stack[stackIdx] = backtrackFrame{
-				n:        curr,
-				path:     searchPath,
-				paramLen: paramLen,
-			}
-			stackIdx++
+		paramLen := 0
+		if params != nil {
+			paramLen = len(*params)
 		}
 
 		// Search static children via byte lookup table
-		for i := 0; i < len(curr.indices); i++ {
-			if curr.indices[i] == c {
-				curr = curr.children[i]
-				continue walk
+		staticIdx := curr.findStaticChildIndex(c)
+		if staticIdx >= 0 {
+			// Push alternative dynamic frames before descending into static child
+			// Push CatchAll first (lower priority), then Param (higher priority)
+			if curr.catchChild != nil && stackIdx < len(stack) {
+				stack[stackIdx] = backtrackFrame{
+					n:        curr,
+					path:     searchPath,
+					paramLen: paramLen,
+					altType:  NodeCatchAll,
+				}
+				stackIdx++
 			}
+			if curr.paramChild != nil && stackIdx < len(stack) {
+				stack[stackIdx] = backtrackFrame{
+					n:        curr,
+					path:     searchPath,
+					paramLen: paramLen,
+					altType:  NodeParam,
+				}
+				stackIdx++
+			}
+
+			curr = curr.children[staticIdx]
+			continue walk
 		}
 
-		// Dynamic child dispatch (param or catch-all)
+		// If no static match, try paramChild
 		if curr.paramChild != nil {
 			end := 0
 			for end < len(searchPath) && searchPath[end] != '/' {
 				end++
 			}
 			if end > 0 {
+				// Push CatchAll as alternative if param branch fails later
+				if curr.catchChild != nil && stackIdx < len(stack) {
+					stack[stackIdx] = backtrackFrame{
+						n:        curr,
+						path:     searchPath,
+						paramLen: paramLen,
+						altType:  NodeCatchAll,
+					}
+					stackIdx++
+				}
+
 				if params != nil {
 					*params = append(*params, Param{
 						Key:   curr.paramChild.paramKey,
@@ -83,6 +105,7 @@ walk:
 			}
 		}
 
+		// Try catchChild as lowest priority
 		if curr.catchChild != nil {
 			if params != nil {
 				*params = append(*params, Param{
@@ -107,34 +130,36 @@ walk:
 			*params = (*params)[:frame.paramLen]
 		}
 
-		// Attempt paramChild first, then catchChild
-		if frame.n.paramChild != nil {
-			end := 0
-			for end < len(searchPath) && searchPath[end] != '/' {
-				end++
+		switch frame.altType {
+		case NodeParam:
+			if frame.n.paramChild != nil {
+				end := 0
+				for end < len(searchPath) && searchPath[end] != '/' {
+					end++
+				}
+				if end > 0 {
+					if params != nil {
+						*params = append(*params, Param{
+							Key:   frame.n.paramChild.paramKey,
+							Value: searchPath[:end],
+						})
+					}
+					searchPath = searchPath[end:]
+					curr = frame.n.paramChild
+					goto walk
+				}
 			}
-			if end > 0 {
+		case NodeCatchAll:
+			if frame.n.catchChild != nil {
 				if params != nil {
 					*params = append(*params, Param{
-						Key:   frame.n.paramChild.paramKey,
-						Value: searchPath[:end],
+						Key:   frame.n.catchChild.paramKey,
+						Value: searchPath,
 					})
 				}
-				searchPath = searchPath[end:]
-				curr = frame.n.paramChild
-				goto walk
-			}
-		}
-
-		if frame.n.catchChild != nil {
-			if params != nil {
-				*params = append(*params, Param{
-					Key:   frame.n.catchChild.paramKey,
-					Value: searchPath,
-				})
-			}
-			if frame.n.catchChild.handler != nil {
-				return frame.n.catchChild.handler, true
+				if frame.n.catchChild.handler != nil {
+					return frame.n.catchChild.handler, true
+				}
 			}
 		}
 	}
