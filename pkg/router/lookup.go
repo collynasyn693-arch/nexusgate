@@ -70,15 +70,17 @@ walk:
 			for end < len(searchPath) && searchPath[end] != '/' {
 				end++
 			}
-			if params != nil {
-				*params = append(*params, Param{
-					Key:   curr.paramChild.paramKey,
-					Value: searchPath[:end],
-				})
+			if end > 0 {
+				if params != nil {
+					*params = append(*params, Param{
+						Key:   curr.paramChild.paramKey,
+						Value: searchPath[:end],
+					})
+				}
+				searchPath = searchPath[end:]
+				curr = curr.paramChild
+				continue walk
 			}
-			searchPath = searchPath[end:]
-			curr = curr.paramChild
-			continue walk
 		}
 
 		if curr.catchChild != nil {
@@ -96,8 +98,8 @@ walk:
 		break
 	}
 
-	// Backtrack unwinding
-	if stackIdx > 0 {
+	// Backtrack unwinding across stack frames
+	for stackIdx > 0 {
 		stackIdx--
 		frame := stack[stackIdx]
 		searchPath = frame.path
@@ -111,15 +113,17 @@ walk:
 			for end < len(searchPath) && searchPath[end] != '/' {
 				end++
 			}
-			if params != nil {
-				*params = append(*params, Param{
-					Key:   frame.n.paramChild.paramKey,
-					Value: searchPath[:end],
-				})
+			if end > 0 {
+				if params != nil {
+					*params = append(*params, Param{
+						Key:   frame.n.paramChild.paramKey,
+						Value: searchPath[:end],
+					})
+				}
+				searchPath = searchPath[end:]
+				curr = frame.n.paramChild
+				goto walk
 			}
-			searchPath = searchPath[end:]
-			curr = frame.n.paramChild
-			goto walk
 		}
 
 		if frame.n.catchChild != nil {
