@@ -1,0 +1,80 @@
+# ==============================================================================
+# NexusGate Edge Gateway Configuration
+# Target Platform: Android Termux (ARM64)
+# ==============================================================================
+
+version: "1.0"
+
+# Inbound HTTP Listener Configuration
+listener:
+  host: "0.0.0.0"
+  port: 8080                 # Enforces >= 1024 for non-root Termux userland
+  read_timeout: "5s"
+  write_timeout: "10s"
+  idle_timeout: "120s"
+  read_header_timeout: "2s"
+  max_header_bytes: 1048576  # 1 MB
+  max_body_bytes: 10485760   # 10 MB
+
+# Route Matching & Upstream Bindings
+routes:
+  - id: "api-v1-users"
+    path: "/api/v1/users"
+    methods:
+      - "GET"
+      - "POST"
+    upstream_id: "user-cluster"
+    strip_prefix: "/api/v1"
+    timeout: "3s"
+
+  - id: "static-mock-health"
+    path: "/healthz"
+    methods:
+      - "GET"
+    mock:
+      enabled: true
+      status_code: 200
+      body: '{"status":"healthy","uptime_state":"ok"}'
+
+# Upstream Backend Target Pools
+upstreams:
+  - id: "user-cluster"
+    algorithm: "swwr"        # Smooth Weighted Round-Robin (Nginx algorithm)
+    targets:
+      - url: "http://127.0.0.1:9001"
+        weight: 3
+        max_conns: 150
+      - url: "http://127.0.0.1:9002"
+        weight: 1
+        max_conns: 50
+    health_check:
+      enabled: true
+      path: "/healthz"
+      interval: "10s"
+      timeout: "2s"
+      healthy_threshold: 2
+      unhealthy_threshold: 3
+
+# Circuit Breaker & Resilience Engine Defaults
+resilience:
+  circuit_breaker:
+    enabled: true
+    consecutive_failures: 5
+    failure_rate_threshold: 0.5  # 50% failure rate triggers Open
+    min_requests: 10
+    reset_timeout: "15s"
+    half_open_max_requests: 3
+
+# Real-Time Telemetry & IPC Observatory
+telemetry:
+  uds_path: "/data/data/com.termux/files/usr/var/run/nexusgate.sock"
+  ring_buffer_size: 65536        # Must be power of 2
+  idle_sleep_timeout: "3s"       # Adaptive battery-saving downshift
+  snapshot_interval: "1s"
+
+# Developer Mock & Chaos Testing
+chaos:
+  enabled: true
+  header_key: "X-NexusGate-Chaos"
+  allowed_subnets:
+    - "127.0.0.1/32"

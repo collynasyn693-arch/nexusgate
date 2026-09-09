@@ -57,7 +57,7 @@ func (h *ConfigHolder) Swap(newCfg *GatewayConfig) (*GatewayConfig, error) {
 	}
 	h.mu.Unlock()
 
-	// Execute callbacks outside lock
+	// Execute callbacks synchronously outside lock
 	for _, fn := range listenersCopy {
 		fn(oldCfg, newCfg)
 	}
@@ -94,35 +94,34 @@ func (h *ConfigHolder) Subscribe(fn ReloadListener) func() {
 // validates the candidate, and atomically swaps it in.
 func (h *ConfigHolder) Update(mutator func(candidate *GatewayConfig) error) (*GatewayConfig, error) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 
 	current := h.ptr.Load()
 	candidate := current.Clone()
 
 	if err := mutator(candidate); err != nil {
+		h.mu.Unlock()
 		return nil, fmt.Errorf("config mutation failed: %w", err)
 	}
 
 	if err := Validate(candidate); err != nil {
+		h.mu.Unlock()
 		return nil, fmt.Errorf("mutated configuration failed validation: %w", err)
 	}
 
 	oldCfg := h.ptr.Swap(candidate)
 
-	// Copy and dispatch listeners
+	// Copy and dispatch listeners synchronously outside lock
 	listenersCopy := make([]ReloadListener, 0, len(h.listeners))
 	for _, fn := range h.listeners {
 		if fn != nil {
 			listenersCopy = append(listenersCopy, fn)
 		}
 	}
+	h.mu.Unlock()
 
-	// Dispatch in background or after releasing lock if called via Update
-	go func() {
-		for _, fn := range listenersCopy {
-			fn(oldCfg, candidate)
-		}
-	}()
+	for _, fn := range listenersCopy {
+		fn(oldCfg, candidate)
+	}
 
 	return candidate, nil
 }

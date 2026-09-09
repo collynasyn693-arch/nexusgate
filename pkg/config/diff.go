@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -93,7 +94,8 @@ func ComputeDiff(oldCfg, newCfg *GatewayConfig) ConfigDiff {
 			diff.AddedRoutes = append(diff.AddedRoutes, id)
 			diff.Changes = append(diff.Changes, fmt.Sprintf("Route added: %q [path=%s, upstream=%s]", id, nr.Path, nr.UpstreamID))
 		} else {
-			if or.Path != nr.Path || or.UpstreamID != nr.UpstreamID || or.Timeout != nr.Timeout || or.StripPrefix != nr.StripPrefix {
+			methodsChanged := !reflect.DeepEqual(or.Methods, nr.Methods)
+			if or.Path != nr.Path || or.UpstreamID != nr.UpstreamID || or.Timeout != nr.Timeout || or.StripPrefix != nr.StripPrefix || methodsChanged {
 				diff.ModifiedRoutes = append(diff.ModifiedRoutes, id)
 				diff.Changes = append(diff.Changes, fmt.Sprintf("Route modified: %q [path: %s -> %s, upstream: %s -> %s]", id, or.Path, nr.Path, or.UpstreamID, nr.UpstreamID))
 			}

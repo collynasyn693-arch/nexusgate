@@ -195,8 +195,12 @@ func (w *Watcher) pollLoop() {
 			w.mu.Unlock()
 
 			if changed {
-				// Debounce to allow multi-write editors to settle
-				time.Sleep(w.debounce)
+				// Select with debounce for clean cancellation
+				select {
+				case <-w.stopChan:
+					return
+				case <-time.After(w.debounce):
+				}
 				_, _ = w.Reload()
 			}
 		}
