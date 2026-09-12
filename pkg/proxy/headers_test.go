@@ -142,3 +142,74 @@ func TestIsHopByHopHeader(t *testing.T) {
 		t.Errorf("expected X-Forwarded-For NOT to be hop-by-hop")
 	}
 }
+
+func TestExtractClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		expected   string
+	}{
+		{"IPv4 with port", "192.168.1.50:48291", "192.168.1.50"},
+		{"IPv4 loopback with port", "127.0.0.1:8080", "127.0.0.1"},
+		{"IPv6 with port and brackets", "[::1]:54321", "::1"},
+		{"IPv6 full with port", "[2001:db8::1]:9999", "2001:db8::1"},
+		{"Bare IPv4 without port", "10.0.0.1", "10.0.0.1"},
+		{"Bare IPv6 with brackets without port", "[::1]", "::1"},
+		{"Unix socket path", "@nexusgate.sock", "@nexusgate.sock"},
+		{"Empty string", "", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "http://example.com", nil)
+			req.RemoteAddr = tc.remoteAddr
+			got := ExtractClientIP(req)
+			if got != tc.expected {
+				t.Errorf("ExtractClientIP(%q) = %q; want %q", tc.remoteAddr, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMutateForwardedHeaders(t *testing.T) {
+	// Case 1: Fresh request without existing X-Forwarded-* headers
+	req1, _ := http.NewRequest("GET", "http://api.nexusgate.internal/users", nil)
+	req1.RemoteAddr = "203.0.113.195:50412"
+	req1.Host = "api.nexusgate.internal"
+
+	MutateForwardedHeaders(req1)
+
+	if got := req1.Header.Get("X-Forwarded-For"); got != "203.0.113.195" {
+		t.Errorf("expected X-Forwarded-For = 203.0.113.195, got %q", got)
+	}
+	if got := req1.Header.Get("X-Real-IP"); got != "203.0.113.195" {
+		t.Errorf("expected X-Real-IP = 203.0.113.195, got %q", got)
+	}
+	if got := req1.Header.Get("X-Forwarded-Proto"); got != "http" {
+		t.Errorf("expected X-Forwarded-Proto = http, got %q", got)
+	}
+	if got := req1.Header.Get("X-Forwarded-Host"); got != "api.nexusgate.internal" {
+		t.Errorf("expected X-Forwarded-Host = api.nexusgate.internal, got %q", got)
+	}
+
+	// Case 2: Chained proxy request with existing X-Forwarded-For
+	req2, _ := http.NewRequest("GET", "https://api.nexusgate.internal/orders", nil)
+	req2.RemoteAddr = "198.51.100.10:3344"
+	req2.Header.Set("X-Forwarded-For", "192.0.2.1")
+	req2.Header.Set("X-Forwarded-Proto", "https")
+	req2.Header.Set("X-Real-IP", "malicious-spoof")
+
+	MutateForwardedHeaders(req2)
+
+	if got := req2.Header.Get("X-Forwarded-For"); got != "192.0.2.1, 198.51.100.10" {
+		t.Errorf("expected X-Forwarded-For chained, got %q", got)
+	}
+	// X-Real-IP must overwrite untrusted value
+	if got := req2.Header.Get("X-Real-IP"); got != "198.51.100.10" {
+		t.Errorf("expected X-Real-IP overwritten, got %q", got)
+	}
+	if got := req2.Header.Get("X-Forwarded-Proto"); got != "https" {
+		t.Errorf("expected X-Forwarded-Proto = https, got %q", got)
+	}
+}
+

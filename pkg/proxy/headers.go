@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"net"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -55,7 +56,6 @@ func RemoveHopByHopHeaders(h http.Header) {
 	}
 
 	// 1. Parse and delete dynamic headers declared in the Connection header.
-	// A request may have multiple Connection headers or comma-separated tokens.
 	if connVals, ok := h["Connection"]; ok {
 		for _, val := range connVals {
 			for _, token := range strings.Split(val, ",") {
@@ -68,7 +68,6 @@ func RemoveHopByHopHeaders(h http.Header) {
 				if _, protected := protectedHeaders[lowerToken]; protected {
 					continue
 				}
-				// Use canonical header key for deletion to match Go's http.Header map
 				canonical := textproto.CanonicalMIMEHeaderKey(token)
 				h.Del(canonical)
 			}
@@ -88,5 +87,64 @@ func RemoveHopByHopHeaders(h http.Header) {
 	// Restore TE: trailers if it was present
 	if hasTrailers {
 		h.Set("TE", "trailers")
+	}
+}
+
+// ExtractClientIP extracts the client IP address from r.RemoteAddr.
+// It cleanly strips port numbers for both IPv4 ("1.2.3.4:5678") and IPv6 ("[::1]:5678"),
+// strips bracket enclosures, and handles bare IP strings or Unix socket paths without ports.
+func ExtractClientIP(r *http.Request) string {
+	if r == nil || r.RemoteAddr == "" {
+		return ""
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// Fallback for bare IPs without ports, unix domain sockets, or test addresses
+		host = r.RemoteAddr
+	}
+
+	// Strip IPv6 enclosing brackets if present
+	host = strings.Trim(host, "[]")
+	return host
+}
+
+// MutateForwardedHeaders computes and attaches standard reverse proxy forwarding headers:
+// - X-Forwarded-For: appends client IP to any existing comma-separated list
+// - X-Real-IP: canonical client IP (overwriting untrusted client values)
+// - X-Forwarded-Proto: "https" if TLS is active or upstream indicates HTTPS, else "http"
+// - X-Forwarded-Host: client's original Host header
+func MutateForwardedHeaders(req *http.Request) {
+	if req == nil {
+		return
+	}
+
+	clientIP := ExtractClientIP(req)
+
+	// 1. X-Forwarded-For
+	if clientIP != "" {
+		if prior := req.Header.Get("X-Forwarded-For"); prior != "" {
+			req.Header.Set("X-Forwarded-For", prior+", "+clientIP)
+		} else {
+			req.Header.Set("X-Forwarded-For", clientIP)
+		}
+		// 2. X-Real-IP
+		req.Header.Set("X-Real-IP", clientIP)
+	}
+
+	// 3. X-Forwarded-Proto
+	proto := "http"
+	if req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https") {
+		proto = "https"
+	}
+	req.Header.Set("X-Forwarded-Proto", proto)
+
+	// 4. X-Forwarded-Host
+	host := req.Host
+	if host == "" && req.URL != nil {
+		host = req.URL.Host
+	}
+	if host != "" {
+		req.Header.Set("X-Forwarded-Host", host)
 	}
 }
