@@ -3,6 +3,7 @@ package proxy
 import (
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -183,3 +184,90 @@ func (tf *TimedFlusher) Stop() {
 	close(tf.stopCh)
 	<-tf.doneCh
 }
+
+// IsSSE reports whether the given header contains the Server-Sent Events Content-Type.
+func IsSSE(header http.Header) bool {
+	if header == nil {
+		return false
+	}
+	contentType := strings.ToLower(strings.TrimSpace(header.Get("Content-Type")))
+	return strings.HasPrefix(contentType, "text/event-stream")
+}
+
+// PrepareSSEHeaders configures headers for low-latency Server-Sent Events dispatch:
+// disables caching, disables proxy buffering (X-Accel-Buffering: no), and sets keep-alive.
+func PrepareSSEHeaders(h http.Header) {
+	if h.Get("Cache-Control") == "" {
+		h.Set("Cache-Control", "no-cache, no-transform")
+	}
+	h.Set("X-Accel-Buffering", "no")
+	h.Set("Connection", "keep-alive")
+}
+
+// ServeStream handles transferring an upstream response to the client ResponseWriter.
+// It removes hop-by-hop headers from the upstream response, copies remaining headers,
+// detects SSE (text/event-stream) to immediately flush headers and chunks, and streams
+// the body using recycled buffers from pool.
+func ServeStream(w http.ResponseWriter, resp *http.Response, pool BufferPool, flushInterval time.Duration) (int64, error) {
+	if pool == nil {
+		pool = DefaultBufferPool
+	}
+
+	// 1. Sanitize upstream response headers
+	RemoveHopByHopHeaders(resp.Header)
+
+	// 2. Detect Server-Sent Events
+	isSSE := IsSSE(resp.Header)
+	if isSSE {
+		PrepareSSEHeaders(resp.Header)
+	}
+
+	// 3. Copy sanitized headers to client ResponseWriter
+	for k, vv := range resp.Header {
+		for _, v := range vv {
+			w.Header().Add(k, v)
+		}
+	}
+
+	// 4. Commit status code
+	w.WriteHeader(resp.StatusCode)
+
+	// 5. If SSE, immediately flush headers to the client socket
+	flusher, hasFlusher := resolveFlusher(w)
+	if isSSE && hasFlusher {
+		flusher.Flush()
+	}
+
+	// 6. Select destination writer and streaming strategy
+	var dst io.Writer = w
+	var cleanup func()
+
+	if isSSE {
+		// Immediate flushing for SSE event chunks
+		if hasFlusher {
+			dst = &flushWriter{w: w, f: flusher}
+		}
+	} else if flushInterval > 0 && hasFlusher {
+		tf := NewTimedFlusher(w, flushInterval)
+		dst = tf
+		cleanup = func() {
+			if closer, ok := tf.(interface{ Stop() }); ok {
+				closer.Stop()
+			}
+		}
+	}
+
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	// 7. Stream body using recycled 32KB buffer
+	buf := pool.GetLarge()
+	defer pool.PutLarge(buf)
+	if len(buf) == 0 {
+		buf = buf[:cap(buf)]
+	}
+
+	return io.CopyBuffer(dst, resp.Body, buf)
+}
+
