@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -163,3 +165,82 @@ func ForwardWebSocketHandshake(r *http.Request, clientRw *bufio.ReadWriter, upst
 
 	return resp, nil
 }
+
+// PumpWebSocket executes a full-duplex, bidirectional byte copy between the client
+// and upstream connections using recycled buffers from pool.
+// It coordinates symmetric connection teardown: when either side disconnects or errors,
+// both connections are closed, unblocking the opposing goroutine immediately.
+// Crucial: Client reads are drained from clientRw.Reader (buffered reader) to ensure
+// no early WebSocket frames sent immediately after the HTTP upgrade request are dropped!
+func PumpWebSocket(clientConn net.Conn, clientRw *bufio.ReadWriter, upstreamConn net.Conn, pool BufferPool) {
+	if pool == nil {
+		pool = DefaultBufferPool
+	}
+
+	var once sync.Once
+	closeBoth := func() {
+		once.Do(func() {
+			_ = clientConn.Close()
+			_ = upstreamConn.Close()
+		})
+	}
+	defer closeBoth()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine 1: Client -> Upstream
+	go func() {
+		defer wg.Done()
+		defer closeBoth()
+		buf := pool.GetLarge()
+		defer pool.PutLarge(buf)
+		if len(buf) == 0 {
+			buf = buf[:cap(buf)]
+		}
+		// Read from clientRw.Reader to avoid dropping bytes pre-buffered during handshake
+		_, _ = io.CopyBuffer(upstreamConn, clientRw.Reader, buf)
+	}()
+
+	// Goroutine 2: Upstream -> Client
+	go func() {
+		defer wg.Done()
+		defer closeBoth()
+		buf := pool.GetLarge()
+		defer pool.PutLarge(buf)
+		if len(buf) == 0 {
+			buf = buf[:cap(buf)]
+		}
+		_, _ = io.CopyBuffer(clientConn, upstreamConn, buf)
+	}()
+
+	wg.Wait()
+}
+
+// ServeWebSocket upgrades, connects, handshakes, and pumps full-duplex WebSocket traffic.
+func ServeWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, pool BufferPool, dialTimeout time.Duration, tlsConfig *tls.Config) error {
+	clientConn, clientRw, err := HijackConnection(w)
+	if err != nil {
+		return fmt.Errorf("websocket hijack failed: %w", err)
+	}
+
+	upstreamConn, err := DialUpstreamWebSocket(target, dialTimeout, tlsConfig)
+	if err != nil {
+		_ = clientConn.Close()
+		return fmt.Errorf("websocket upstream dial failed: %w", err)
+	}
+
+	resp, err := ForwardWebSocketHandshake(r, clientRw, upstreamConn, target)
+	if err != nil {
+		_ = clientConn.Close()
+		_ = upstreamConn.Close()
+		return fmt.Errorf("websocket handshake forward failed: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+
+	PumpWebSocket(clientConn, clientRw, upstreamConn, pool)
+	return nil
+}
+
