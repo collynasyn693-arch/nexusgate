@@ -88,23 +88,26 @@ func hashClientIP(addr string) uint64 {
 	return h
 }
 
-// extractIP returns the client IP address string from the HTTP request headers or RemoteAddr.
+// extractIP returns the client IP address string from HTTP headers or RemoteAddr without allocations.
 func extractIP(req *http.Request) string {
 	if req == nil {
 		return ""
 	}
-	// Check standard proxy headers first if present
-	if xff := req.Header.Get("X-Forwarded-For"); len(xff) > 0 {
-		// Take first IP in comma-separated chain
-		for i := 0; i < len(xff); i++ {
-			if xff[i] == ',' {
-				return xff[:i]
+	if len(req.Header) == 0 {
+		return req.RemoteAddr
+	}
+	// Direct map access with pre-canonicalized keys avoids CanonicalMIMEHeaderKey heap escapes
+	if xff := req.Header["X-Forwarded-For"]; len(xff) > 0 && len(xff[0]) > 0 {
+		val := xff[0]
+		for i := 0; i < len(val); i++ {
+			if val[i] == ',' {
+				return val[:i]
 			}
 		}
-		return xff
+		return val
 	}
-	if xri := req.Header.Get("X-Real-IP"); len(xri) > 0 {
-		return xri
+	if xri := req.Header["X-Real-Ip"]; len(xri) > 0 && len(xri[0]) > 0 {
+		return xri[0]
 	}
 	return req.RemoteAddr
 }
