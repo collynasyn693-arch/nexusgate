@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -134,6 +135,7 @@ func resolveFlusher(w io.Writer) (http.Flusher, bool) {
 
 // TimedFlusher wraps an io.Writer to periodically flush buffered data at flushInterval.
 type TimedFlusher struct {
+	mu      sync.Mutex
 	w       io.Writer
 	flusher http.Flusher
 	stopCh  chan struct{}
@@ -164,9 +166,13 @@ func NewTimedFlusher(w io.Writer, interval time.Duration) io.Writer {
 		for {
 			select {
 			case <-ticker.C:
+				tf.mu.Lock()
 				tf.flusher.Flush()
+				tf.mu.Unlock()
 			case <-tf.stopCh:
+				tf.mu.Lock()
 				tf.flusher.Flush()
+				tf.mu.Unlock()
 				return
 			}
 		}
@@ -176,6 +182,8 @@ func NewTimedFlusher(w io.Writer, interval time.Duration) io.Writer {
 }
 
 func (tf *TimedFlusher) Write(p []byte) (int, error) {
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
 	return tf.w.Write(p)
 }
 

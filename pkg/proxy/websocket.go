@@ -89,7 +89,7 @@ func DialUpstreamWebSocket(target *url.URL, dialTimeout time.Duration, tlsConfig
 	scheme := strings.ToLower(target.Scheme)
 
 	// Ensure port is present
-	if !strings.Contains(host, ":") {
+	if _, _, err := net.SplitHostPort(host); err != nil {
 		if scheme == "wss" || scheme == "https" {
 			host = net.JoinHostPort(host, "443")
 		} else {
@@ -116,18 +116,21 @@ func DialUpstreamWebSocket(target *url.URL, dialTimeout time.Duration, tlsConfig
 
 // ForwardWebSocketHandshake writes the client's handshake request to the upstream connection,
 // verifies that the upstream responds with HTTP 101 Switching Protocols, and relays the
-// 101 response back to the client.
-func ForwardWebSocketHandshake(r *http.Request, clientRw *bufio.ReadWriter, upstreamConn net.Conn, target *url.URL) (*http.Response, error) {
+// 101 response back to the client. Returns the upstream response and the buffered reader
+// to prevent dropping early pipelined frames.
+func ForwardWebSocketHandshake(r *http.Request, clientRw *bufio.ReadWriter, upstreamConn net.Conn, target *url.URL) (*http.Response, io.Reader, error) {
 	// 1. Clone request and prepare headers for upstream
 	outReq := r.Clone(r.Context())
 	outReq.URL.Scheme = target.Scheme
 	outReq.URL.Host = target.Host
-	outReq.Host = target.Host
 
 	// Ensure required WebSocket upgrade headers are explicitly set
 	outReq.Header.Set("Upgrade", "websocket")
 	outReq.Header.Set("Connection", "Upgrade")
 	MutateForwardedHeaders(outReq)
+
+	// Synchronize Host header after mutating forwarded headers
+	outReq.Host = target.Host
 
 	// Remove hop-by-hop headers OTHER than Upgrade and Connection
 	for hop := range hopByHopHeaders {
@@ -139,42 +142,46 @@ func ForwardWebSocketHandshake(r *http.Request, clientRw *bufio.ReadWriter, upst
 
 	// 2. Write client handshake request to upstream
 	if err := outReq.Write(upstreamConn); err != nil {
-		return nil, fmt.Errorf("failed to write websocket handshake to upstream: %w", err)
+		return nil, nil, fmt.Errorf("failed to write websocket handshake to upstream: %w", err)
 	}
 
 	// 3. Read upstream response
 	upstreamReader := bufio.NewReader(upstreamConn)
 	resp, err := http.ReadResponse(upstreamReader, outReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read websocket response from upstream: %w", err)
+		return nil, nil, fmt.Errorf("failed to read websocket response from upstream: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		return resp, ErrUpgradeFailed
+		return resp, nil, ErrUpgradeFailed
 	}
 
 	// 4. Relay 101 response back to client and flush
 	if err := resp.Write(clientRw); err != nil {
 		resp.Body.Close()
-		return nil, fmt.Errorf("failed to relay 101 response to client: %w", err)
+		return nil, nil, fmt.Errorf("failed to relay 101 response to client: %w", err)
 	}
 	if err := clientRw.Flush(); err != nil {
 		resp.Body.Close()
-		return nil, fmt.Errorf("failed to flush 101 response to client: %w", err)
+		return nil, nil, fmt.Errorf("failed to flush 101 response to client: %w", err)
 	}
 
-	return resp, nil
+	return resp, upstreamReader, nil
 }
 
 // PumpWebSocket executes a full-duplex, bidirectional byte copy between the client
 // and upstream connections using recycled buffers from pool.
 // It coordinates symmetric connection teardown: when either side disconnects or errors,
 // both connections are closed, unblocking the opposing goroutine immediately.
-// Crucial: Client reads are drained from clientRw.Reader (buffered reader) to ensure
-// no early WebSocket frames sent immediately after the HTTP upgrade request are dropped!
-func PumpWebSocket(clientConn net.Conn, clientRw *bufio.ReadWriter, upstreamConn net.Conn, pool BufferPool) {
+// Crucial: Client reads are drained from clientRw.Reader, and upstream reads are drained
+// from upstreamReader (buffered reader) to ensure no early WebSocket frames sent in either
+// direction are dropped!
+func PumpWebSocket(clientConn net.Conn, clientRw *bufio.ReadWriter, upstreamConn net.Conn, upstreamReader io.Reader, pool BufferPool) {
 	if pool == nil {
 		pool = DefaultBufferPool
+	}
+	if upstreamReader == nil {
+		upstreamReader = upstreamConn
 	}
 
 	var once sync.Once
@@ -211,7 +218,8 @@ func PumpWebSocket(clientConn net.Conn, clientRw *bufio.ReadWriter, upstreamConn
 		if len(buf) == 0 {
 			buf = buf[:cap(buf)]
 		}
-		_, _ = io.CopyBuffer(clientConn, upstreamConn, buf)
+		// Read from upstreamReader to avoid dropping early server frames
+		_, _ = io.CopyBuffer(clientConn, upstreamReader, buf)
 	}()
 
 	wg.Wait()
@@ -230,7 +238,7 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, poo
 		return fmt.Errorf("websocket upstream dial failed: %w", err)
 	}
 
-	resp, err := ForwardWebSocketHandshake(r, clientRw, upstreamConn, target)
+	resp, upstreamReader, err := ForwardWebSocketHandshake(r, clientRw, upstreamConn, target)
 	if err != nil {
 		_ = clientConn.Close()
 		_ = upstreamConn.Close()
@@ -240,7 +248,7 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, poo
 		_ = resp.Body.Close()
 	}
 
-	PumpWebSocket(clientConn, clientRw, upstreamConn, pool)
+	PumpWebSocket(clientConn, clientRw, upstreamConn, upstreamReader, pool)
 	return nil
 }
 

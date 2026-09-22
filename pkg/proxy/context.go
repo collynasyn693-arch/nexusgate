@@ -105,7 +105,6 @@ func NewUpstreamRequest(ctx context.Context, r *http.Request, target *url.URL) (
 	// Clone request with the new context
 	outReq := r.Clone(ctx)
 	outReq.URL = outURL
-	outReq.Host = target.Host
 	outReq.RequestURI = "" // RequestURI must be empty for client requests
 
 	// Annotate context with tracing metadata
@@ -119,8 +118,11 @@ func NewUpstreamRequest(ctx context.Context, r *http.Request, target *url.URL) (
 	// Strip incoming hop-by-hop headers
 	RemoveHopByHopHeaders(outReq.Header)
 
-	// Attach X-Forwarded-* and X-Real-IP headers
+	// Attach X-Forwarded-* and X-Real-IP headers preserving original client Host
 	MutateForwardedHeaders(outReq)
+
+	// Synchronize Host header with target backend host
+	outReq.Host = target.Host
 
 	return outReq, nil
 }

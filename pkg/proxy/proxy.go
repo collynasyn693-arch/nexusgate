@@ -49,7 +49,7 @@ func (p *ReverseProxy) ServeProxy(w http.ResponseWriter, r *http.Request, target
 
 	// 1. WebSocket connection hijacking check
 	if IsWebSocketRequest(r) {
-		err := ServeWebSocket(tracker, r, target, p.bufferPool, 10*DefaultTransportOptions.DialTimeout, nil)
+		err := ServeWebSocket(tracker, r, target, p.bufferPool, DefaultTransportOptions.DialTimeout, nil)
 		if err != nil {
 			WriteGatewayError(tracker, r, err, p.config.ErrorHandler)
 		}

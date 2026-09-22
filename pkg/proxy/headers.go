@@ -39,6 +39,15 @@ var protectedHeaders = map[string]struct{}{
 	"x-real-ip":         {},
 }
 
+// isProtectedHeader reports whether a header cannot be stripped by dynamic Connection tokens.
+func isProtectedHeader(lowerToken string) bool {
+	if strings.HasPrefix(lowerToken, "x-forwarded-") {
+		return true
+	}
+	_, ok := protectedHeaders[lowerToken]
+	return ok
+}
+
 // IsHopByHopHeader reports whether the given header key is a standard hop-by-hop header.
 func IsHopByHopHeader(key string) bool {
 	_, ok := hopByHopHeaders[strings.ToLower(key)]
@@ -65,7 +74,7 @@ func RemoveHopByHopHeaders(h http.Header) {
 				}
 				lowerToken := strings.ToLower(token)
 				// Security guard: protect core framing and authentication headers
-				if _, protected := protectedHeaders[lowerToken]; protected {
+				if isProtectedHeader(lowerToken) {
 					continue
 				}
 				canonical := textproto.CanonicalMIMEHeaderKey(token)
