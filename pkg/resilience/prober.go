@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -29,6 +30,7 @@ type ProberConfig struct {
 	Target             string        `json:"target" yaml:"target"`       // e.g. "http://127.0.0.1:8081/healthz" or "127.0.0.1:8081"
 	Path               string        `json:"path" yaml:"path"`           // Health check path, defaults to "/healthz"
 	Interval           time.Duration `json:"interval" yaml:"interval"`   // Base interval between checks
+	JitterRatio        float64       `json:"jitter_ratio" yaml:"jitter_ratio"` // Interval jitter ratio (default: 0.20 for +/- 20%)
 	Timeout            time.Duration `json:"timeout" yaml:"timeout"`     // Maximum duration for a single probe
 	HealthyThreshold   int           `json:"healthy_threshold" yaml:"healthy_threshold"`     // Consecutive successes to mark healthy
 	UnhealthyThreshold int           `json:"unhealthy_threshold" yaml:"unhealthy_threshold"` // Consecutive failures to mark unhealthy
@@ -41,6 +43,7 @@ func DefaultProberConfig(target string) ProberConfig {
 		Target:             target,
 		Path:               "/healthz",
 		Interval:           10 * time.Second,
+		JitterRatio:        0.20,
 		Timeout:            2 * time.Second,
 		HealthyThreshold:   2,
 		UnhealthyThreshold: 3,
@@ -278,11 +281,40 @@ func (p *Prober) Stop() {
 	}
 }
 
-// probeLoop executes periodic health probes with context awareness.
+// NextJitteredInterval calculates the next health check sleep duration applying
+// randomized uniform jitter (+/- 20% by default) around the base interval.
+// This de-synchronizes cellular radio wakeups across independent upstreams and
+// prevents periodic cellular modem wake-lock alignment storms on mobile Android Termux devices.
+func (p *Prober) NextJitteredInterval() time.Duration {
+	base := float64(p.cfg.Interval)
+	if base <= 0 {
+		base = float64(10 * time.Second)
+	}
+
+	ratio := p.cfg.JitterRatio
+	if ratio <= 0.0 || ratio > 0.5 {
+		ratio = 0.20 // Default +/- 20%
+	}
+
+	// Uniform distribution between (1.0 - ratio) and (1.0 + ratio)
+	// e.g. for ratio=0.20: [0.80, 1.20]
+	minFactor := 1.0 - ratio
+	spread := 2.0 * ratio
+	factor := minFactor + spread*rand.Float64()
+
+	dur := time.Duration(base * factor)
+	if dur < 20*time.Millisecond {
+		dur = 20 * time.Millisecond
+	}
+	return dur
+}
+
+// probeLoop executes periodic health probes with context awareness and randomized jitter.
 func (p *Prober) probeLoop(ctx context.Context) {
 	defer close(p.done)
 
-	timer := time.NewTimer(p.cfg.Interval)
+	nextDur := p.NextJitteredInterval()
+	timer := time.NewTimer(nextDur)
 	defer timer.Stop()
 
 	for {
@@ -295,7 +327,7 @@ func (p *Prober) probeLoop(ctx context.Context) {
 			probeCancel()
 
 			p.RecordProbeResult(err)
-			timer.Reset(p.cfg.Interval)
+			timer.Reset(p.NextJitteredInterval())
 		}
 	}
 }
