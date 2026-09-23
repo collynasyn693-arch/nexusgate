@@ -21,6 +21,7 @@ type bucket struct {
 type SlidingWindow struct {
 	mu      sync.Mutex
 	epoch   time.Time
+	timeFn  func() int64
 	buckets [DefaultWindowBuckets]bucket // 1,440 bytes inline contiguous memory
 }
 
@@ -33,6 +34,9 @@ func NewSlidingWindow() *SlidingWindow {
 
 // monotonicSecond returns the current monotonic second since the window epoch.
 func (w *SlidingWindow) monotonicSecond() int64 {
+	if w.timeFn != nil {
+		return w.timeFn()
+	}
 	return int64(time.Since(w.epoch) / time.Second)
 }
 
