@@ -67,7 +67,23 @@ func (b *Breaker) Name() string {
 
 // State returns the current State (Closed, Half-Open, Open).
 func (b *Breaker) State() State {
-	return b.fsm.State()
+	st := b.fsm.State()
+	b.state.Store(int32(st))
+	return st
+}
+
+// Trip manually transitions the circuit breaker to StateOpen.
+func (b *Breaker) Trip() bool {
+	res := b.fsm.Trip()
+	b.state.Store(int32(b.fsm.State()))
+	return res
+}
+
+// TransitionTo attempts a state transition on the underlying FSM and syncs the atomic state cache.
+func (b *Breaker) TransitionTo(st State) error {
+	err := b.fsm.TransitionTo(st)
+	b.state.Store(int32(b.fsm.State()))
+	return err
 }
 
 // Allow reports whether a new request is permitted to proceed upstream.
@@ -84,12 +100,19 @@ func (b *Breaker) allowSlow() bool {
 	st := b.fsm.State()
 	b.state.Store(int32(st))
 
+	if st == StateClosed {
+		return true
+	}
+
 	if st == StateOpen {
 		if !b.fsm.allowSlow() {
 			return false
 		}
 		st = b.fsm.State()
 		b.state.Store(int32(st))
+		if st == StateClosed {
+			return true
+		}
 	}
 
 	res := b.halfOpen.Allow()

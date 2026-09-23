@@ -2,6 +2,7 @@ package resilience
 
 import (
 	"testing"
+	"time"
 )
 
 // BenchmarkAllow_Closed_Sequential measures the single-goroutine execution latency
@@ -66,8 +67,10 @@ func BenchmarkFSM_Allow_Closed_Parallel(b *testing.B) {
 
 // BenchmarkAllow_Open measures rejection latency when the circuit breaker is in StateOpen.
 func BenchmarkAllow_Open(b *testing.B) {
-	cb := NewBreaker("bench-open", DefaultConfig())
-	cb.fsm.Trip()
+	cfg := DefaultConfig()
+	cfg.ResetTimeout = 1 * time.Hour // Ensure cooldown does not expire during benchmark
+	cb := NewBreaker("bench-open", cfg)
+	cb.Trip()
 	b.ReportAllocs()
 	b.ResetTimer()
 
