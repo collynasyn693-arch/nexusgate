@@ -20,6 +20,7 @@ type SecurityGuard struct {
 	enabled        bool
 	adminKey       string
 	headerKey      string
+	canonicalKey   string
 	allowedSubnets []*net.IPNet
 	strictMode     bool
 }
@@ -32,10 +33,11 @@ func NewSecurityGuard(cfg Config) (*SecurityGuard, error) {
 	}
 
 	sg := &SecurityGuard{
-		enabled:    cfg.Enabled,
-		adminKey:   cfg.AdminKey,
-		headerKey:  headerKey,
-		strictMode: cfg.StrictMode,
+		enabled:      cfg.Enabled,
+		adminKey:     cfg.AdminKey,
+		headerKey:    headerKey,
+		canonicalKey: http.CanonicalHeaderKey(headerKey),
+		strictMode:   cfg.StrictMode,
 	}
 
 	if len(cfg.AllowedSubnets) > 0 {
@@ -45,7 +47,6 @@ func NewSecurityGuard(cfg Config) (*SecurityGuard, error) {
 			if s == "" {
 				continue
 			}
-			// Handle single IP shorthand by appending /32 or /128
 			if !strings.Contains(s, "/") {
 				ip := net.ParseIP(s)
 				if ip == nil {
@@ -84,10 +85,17 @@ func (sg *SecurityGuard) Authorize(r *http.Request) bool {
 
 	keyValid := false
 	if hasKeyCheck {
-		provided := r.Header.Get(sg.headerKey)
-		// Constant-time compare only if non-empty and length matches
+		var provided string
+		if r.Header != nil {
+			if vals := r.Header[sg.canonicalKey]; len(vals) > 0 {
+				provided = vals[0]
+			} else if vals := r.Header[sg.headerKey]; len(vals) > 0 {
+				provided = vals[0]
+			}
+		}
+
 		if provided != "" && len(provided) == len(sg.adminKey) {
-			if subtle.ConstantTimeCompare([]byte(provided), []byte(sg.adminKey)) == 1 {
+			if constantTimeCompareString(provided, sg.adminKey) == 1 {
 				keyValid = true
 			}
 		}
@@ -99,7 +107,6 @@ func (sg *SecurityGuard) Authorize(r *http.Request) bool {
 		subnetValid = sg.IsIPAllowed(clientIP)
 	}
 
-	// Defense in depth: if both checks configured, BOTH must pass
 	if hasKeyCheck && hasSubnetCheck {
 		return keyValid && subnetValid
 	}
@@ -107,6 +114,18 @@ func (sg *SecurityGuard) Authorize(r *http.Request) bool {
 		return keyValid
 	}
 	return subnetValid
+}
+
+// constantTimeCompareString performs constant-time string comparison without heap allocations.
+func constantTimeCompareString(x, y string) int {
+	if len(x) != len(y) {
+		return 0
+	}
+	var v byte
+	for i := 0; i < len(x); i++ {
+		v |= x[i] ^ y[i]
+	}
+	return subtle.ConstantTimeByteEq(v, 0)
 }
 
 // IsIPAllowed tests if the provided IP string falls within any allowed CIDR subnets.
