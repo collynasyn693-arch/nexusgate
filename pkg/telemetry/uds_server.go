@@ -16,7 +16,7 @@ import (
 const LinuxSunPathMax = 108
 
 var (
-	ErrPathTooLong = errors.New("UDS socket path exceeds Linux 108-byte sun_path limit")
+	ErrPathTooLong  = errors.New("UDS socket path exceeds Linux 108-byte sun_path limit")
 	ErrServerClosed = errors.New("UDS server is closed")
 )
 
@@ -104,7 +104,6 @@ func (s *UDSServer) acceptLoop(l net.Listener) {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			// Listener closed or fatal error
 			if s.closed.Load() {
 				return
 			}
@@ -133,6 +132,18 @@ func (s *UDSServer) registerClient(conn net.Conn) {
 	if s.onConnect != nil {
 		s.onConnect(conn)
 	}
+
+	// Launch background reader to detect client EOF / disconnect
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			_, err := conn.Read(buf)
+			if err != nil {
+				s.RemoveClient(conn)
+				return
+			}
+		}
+	}()
 }
 
 // RemoveClient unregisters and closes a client connection.
