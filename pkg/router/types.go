@@ -71,9 +71,13 @@ func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, p Params)
 	f(w, r, p)
 }
 
-// WrapHTTPHandler wraps a standard library http.Handler into a router.Handler.
+// WrapHTTPHandler wraps a standard library http.Handler into a router.Handler,
+// injecting extracted path parameters into the request context.
 func WrapHTTPHandler(h http.Handler) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, p Params) {
+		if len(p) > 0 {
+			r = r.WithContext(WithParams(r.Context(), p))
+		}
 		h.ServeHTTP(w, r)
 	}
 }

@@ -15,12 +15,13 @@ func TestRingBuffer_RaceMultiProducerSingleConsumer(t *testing.T) {
 	rb := NewRingBuffer(DefaultRingBufferSize)
 
 	var (
-		startCh        = make(chan struct{})
-		producerWg     sync.WaitGroup
-		consumerDone   = make(chan struct{})
-		successPushed  atomic.Uint64
-		totalPopped    atomic.Uint64
-		dataCorruptions atomic.Uint64
+		startCh           = make(chan struct{})
+		producerWg        sync.WaitGroup
+		consumerDone      = make(chan struct{})
+		producersFinished atomic.Bool
+		successPushed     atomic.Uint64
+		totalPopped       atomic.Uint64
+		dataCorruptions   atomic.Uint64
 	)
 
 	// Launch single consumer goroutine
@@ -40,8 +41,8 @@ func TestRingBuffer_RaceMultiProducerSingleConsumer(t *testing.T) {
 					totalPopped.Add(1)
 				}
 			} else {
-				// If all producers are done and buffer is empty, terminate
-				if successPushed.Load() > 0 && totalPopped.Load() == successPushed.Load() {
+				// If all producers are done and buffer is empty, terminate cleanly
+				if producersFinished.Load() && rb.IsEmpty() {
 					return
 				}
 				time.Sleep(10 * time.Microsecond)
@@ -82,6 +83,7 @@ func TestRingBuffer_RaceMultiProducerSingleConsumer(t *testing.T) {
 
 	// Wait for all producers to finish
 	producerWg.Wait()
+	producersFinished.Store(true)
 
 	// Wait for consumer to drain all pushed events
 	select {

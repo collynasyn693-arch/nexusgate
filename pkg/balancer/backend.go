@@ -85,8 +85,13 @@ func (b *Backend) IsDraining() bool {
 }
 
 // SetDraining marks the backend as draining or not draining.
+// When un-draining (d == false), it calls ResetDrain to re-arm the drainDone channel.
 func (b *Backend) SetDraining(d bool) {
-	b.draining.Store(d)
+	if !d {
+		b.ResetDrain()
+		return
+	}
+	b.draining.Store(true)
 }
 
 // Latency returns the current Peak-EWMA latency estimate as a time.Duration.

@@ -120,6 +120,16 @@ func (b *Breaker) allowSlow() bool {
 	return res
 }
 
+// ReleaseInflight decrements active canary counters if a request aborts before recording.
+func (b *Breaker) ReleaseInflight() {
+	if b.halfOpen != nil {
+		b.halfOpen.ReleaseInflight()
+	}
+	if b.fsm != nil {
+		b.fsm.ReleaseInflight()
+	}
+}
+
 // RecordSuccess records a successful upstream response.
 func (b *Breaker) RecordSuccess() {
 	st := b.fsm.State()

@@ -120,6 +120,13 @@ func (pt *PassiveTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, err
 }
 
+// CloseIdleConnections closes any idle connections on the underlying transport if supported.
+func (pt *PassiveTransport) CloseIdleConnections() {
+	if closer, ok := pt.transport.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
 // PassiveMiddleware wraps an http.Handler with circuit breaker enforcement.
 // If the circuit breaker rejects the request, it delegates to the fallback handler
 // (or returns HTTP 503 if no fallback handler is set).
@@ -147,12 +154,21 @@ func PassiveMiddleware(breaker CircuitBreaker, fallback http.Handler) func(http.
 			next.ServeHTTP(tw, r)
 
 			if breaker != nil {
-				if r.Context().Err() == nil {
-					if DefaultFailureClassifier(tw.statusCode, nil) {
-						breaker.RecordFailure()
-					} else {
-						breaker.RecordSuccess()
+				// Prevent developer chaos injection faults from tripping production circuit breakers
+				if tw.Header().Get("X-NexusGate-Chaos-Injected") != "" {
+					return
+				}
+				if r.Context().Err() != nil {
+					// Client aborted request before completion; release canary permit without recording failure
+					if breaker.State() == StateHalfOpen {
+						breaker.ReleaseInflight()
 					}
+					return
+				}
+				if DefaultFailureClassifier(tw.statusCode, nil) {
+					breaker.RecordFailure()
+				} else {
+					breaker.RecordSuccess()
 				}
 			}
 		})

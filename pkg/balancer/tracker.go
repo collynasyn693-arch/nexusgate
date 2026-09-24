@@ -65,18 +65,27 @@ func (g *ConnGuard) Release() {
 	connGuardPool.Put(g)
 }
 
-// Done releases the connection, records the request latency into Peak-EWMA, and increments
-// totalErrors if err != nil.
-func (g *ConnGuard) Done(latency time.Duration, err error) {
-	if g == nil {
+// Record updates the request latency into Peak-EWMA and increments totalErrors if err != nil,
+// without releasing the connection. This allows safe latency tracking when using defer guard.Release().
+func (g *ConnGuard) Record(latency time.Duration, err error) {
+	if g == nil || g.released.Load() {
 		return
 	}
 	b := g.backend
-	g.Release()
 	if b != nil {
 		if err != nil {
 			b.totalErrors.Add(1)
 		}
 		b.RecordLatency(latency)
 	}
+}
+
+// Done releases the connection, records the request latency into Peak-EWMA, and increments
+// totalErrors if err != nil. If the guard was already released, Done is an idempotent no-op.
+func (g *ConnGuard) Done(latency time.Duration, err error) {
+	if g == nil || g.released.Load() {
+		return
+	}
+	g.Record(latency, err)
+	g.Release()
 }

@@ -238,3 +238,17 @@ func (fsm *BreakerFSM) allowSlow() bool {
 
 	return st == StateClosed
 }
+
+// ReleaseInflight decrements the active canary concurrency counter for the FSM.
+// Bounded at zero with CAS to eliminate any underflow hazard.
+func (fsm *BreakerFSM) ReleaseInflight() {
+	for {
+		cur := fsm.halfOpenInflight.Load()
+		if cur <= 0 {
+			return
+		}
+		if fsm.halfOpenInflight.CompareAndSwap(cur, cur-1) {
+			return
+		}
+	}
+}

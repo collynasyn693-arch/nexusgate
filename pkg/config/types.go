@@ -108,11 +108,16 @@ type TelemetryConfig struct {
 
 // ChaosConfig sets developer chaos injection parameters.
 type ChaosConfig struct {
-	Enabled        bool          `json:"enabled" yaml:"enabled"`
-	HeaderKey      string        `json:"header_key,omitempty" yaml:"header_key,omitempty"`
-	AllowedSubnets []string      `json:"allowed_subnets,omitempty" yaml:"allowed_subnets,omitempty"`
-	FailureRate    float64       `json:"failure_rate,omitempty" yaml:"failure_rate,omitempty"`
-	Delay          time.Duration `json:"delay,omitempty" yaml:"delay,omitempty"`
+	Enabled             bool          `json:"enabled" yaml:"enabled"`
+	AdminKey            string        `json:"admin_key,omitempty" yaml:"admin_key,omitempty"`
+	HeaderKey           string        `json:"header_key,omitempty" yaml:"header_key,omitempty"`
+	AllowedSubnets      []string      `json:"allowed_subnets,omitempty" yaml:"allowed_subnets,omitempty"`
+	FailureRate         float64       `json:"failure_rate,omitempty" yaml:"failure_rate,omitempty"`
+	Delay               time.Duration `json:"delay,omitempty" yaml:"delay,omitempty"`
+	MaxDelay            time.Duration `json:"max_delay,omitempty" yaml:"max_delay,omitempty"`
+	MaxBodyBytes        int           `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	MaxConcurrentDelays int           `json:"max_concurrent_delays,omitempty" yaml:"max_concurrent_delays,omitempty"`
+	StrictMode          bool          `json:"strict_mode,omitempty" yaml:"strict_mode,omitempty"`
 }
 
 // Clone creates a deep copy of GatewayConfig to guarantee immutability across atomic swaps.

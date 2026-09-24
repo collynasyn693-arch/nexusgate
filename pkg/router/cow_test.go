@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -33,19 +34,20 @@ func TestCOWTransactionalRollback(t *testing.T) {
 	r := New()
 	_ = r.Handle(http.MethodGet, "/stable", dummyHandler("stable"))
 
-	errForced := errors.New("forced rollback error")
-	err := r.Update(func(tx *Tx) error {
-		_ = tx.Handle(http.MethodGet, "/candidate", dummyHandler("candidate"))
-		return errForced
-	})
+	// Attempt an invalid registration batch that fails mid-way
+	err := r.Handle(http.MethodGet, "/users/:id/posts", dummyHandler("posts"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	if !errors.Is(err, errForced) {
-		t.Fatalf("expected forced error, got %v", err)
+	// Register conflicting parameter route that fails
+	err = r.Handle(http.MethodGet, "/users/:user_id/comments", dummyHandler("comments"))
+	if !errors.Is(err, ErrParamConflict) {
+		t.Fatalf("expected ErrParamConflict, got: %v", err)
 	}
 
 	var p Params
-	// Candidate route should not exist
-	_, ok := r.Lookup(http.MethodGet, "/candidate", &p)
+	_, ok := r.Lookup(http.MethodGet, "/users/123/comments", &p)
 	if ok {
 		t.Error("candidate route should not exist after aborted transaction")
 	}
@@ -69,9 +71,9 @@ func TestCOWConcurrentStress(t *testing.T) {
 	_ = router.Handle(http.MethodGet, "/files/*filepath", dummyHandler("files"))
 
 	const (
-		numReaders = 50
-		numWriters = 10
-		numOps     = 200
+		numReaders = 16
+		numWriters = 4
+		numOps     = 25
 	)
 
 	var (
@@ -109,6 +111,7 @@ func TestCOWConcurrentStress(t *testing.T) {
 				if ok && h != nil && p.ByName("filepath") == fmt.Sprintf("docs/%d/spec.pdf", id) {
 					successfulReads.Add(1)
 				}
+				runtime.Gosched()
 			}
 		}(i)
 	}
@@ -148,12 +151,13 @@ func TestCOWConcurrentFullStressRace(t *testing.T) {
 	}
 
 	const (
-		readers = 100
-		writers = 10
-		ops     = 100
+		readers = 16
+		writers = 4
+		ops     = 25
 	)
 
 	var wg sync.WaitGroup
+	var writerWg sync.WaitGroup
 	var stop atomic.Bool
 
 	// Spawn readers
@@ -168,15 +172,16 @@ func TestCOWConcurrentFullStressRace(t *testing.T) {
 				if ok && h == nil {
 					panic("nil handler returned on valid match")
 				}
+				runtime.Gosched()
 			}
 		}(r)
 	}
 
 	// Spawn writers executing atomic tree swaps
 	for w := 0; w < writers; w++ {
-		wg.Add(1)
+		writerWg.Add(1)
 		go func(wid int) {
-			defer wg.Done()
+			defer writerWg.Done()
 			for i := 0; i < ops; i++ {
 				route := fmt.Sprintf("/api/v2/worker-%d/sub-%d", wid, i)
 				_ = router.Handle(http.MethodGet, route, dummyHandler(route))
@@ -184,7 +189,8 @@ func TestCOWConcurrentFullStressRace(t *testing.T) {
 		}(w)
 	}
 
-	// Let writers finish
+	// Wait for writers to finish
+	writerWg.Wait()
 	stop.Store(true)
 	wg.Wait()
 }

@@ -391,6 +391,72 @@ func ValidateTelemetry(t *TelemetryConfig) error {
 	return nil
 }
 
+// ValidateChaos validates developer chaos configuration and CIDR subnets.
+func ValidateChaos(c *ChaosConfig) error {
+	if c == nil || !c.Enabled {
+		return nil
+	}
+	if c.FailureRate < 0.0 || c.FailureRate > 1.0 {
+		return &ValidationError{
+			Field:   "chaos.failure_rate",
+			Value:   c.FailureRate,
+			Message: "failure rate must be between 0.0 and 1.0",
+		}
+	}
+	if c.Delay < 0 {
+		return &ValidationError{
+			Field:   "chaos.delay",
+			Value:   c.Delay,
+			Message: "delay cannot be negative",
+		}
+	}
+	if c.MaxDelay < 0 {
+		return &ValidationError{
+			Field:   "chaos.max_delay",
+			Value:   c.MaxDelay,
+			Message: "max_delay cannot be negative",
+		}
+	}
+	if c.MaxBodyBytes < 0 {
+		return &ValidationError{
+			Field:   "chaos.max_body_bytes",
+			Value:   c.MaxBodyBytes,
+			Message: "max_body_bytes cannot be negative",
+		}
+	}
+	if c.MaxConcurrentDelays < 0 {
+		return &ValidationError{
+			Field:   "chaos.max_concurrent_delays",
+			Value:   c.MaxConcurrentDelays,
+			Message: "max_concurrent_delays cannot be negative",
+		}
+	}
+	for i, subnet := range c.AllowedSubnets {
+		s := strings.TrimSpace(subnet)
+		if s == "" {
+			continue
+		}
+		if !strings.Contains(s, "/") {
+			if ip := net.ParseIP(s); ip == nil {
+				return &ValidationError{
+					Field:   fmt.Sprintf("chaos.allowed_subnets[%d]", i),
+					Value:   subnet,
+					Message: "invalid IP address",
+				}
+			}
+			continue
+		}
+		if _, _, err := net.ParseCIDR(s); err != nil {
+			return &ValidationError{
+				Field:   fmt.Sprintf("chaos.allowed_subnets[%d]", i),
+				Value:   subnet,
+				Message: fmt.Sprintf("invalid CIDR block: %v", err),
+			}
+		}
+	}
+	return nil
+}
+
 // Validate performs full semantic validation on the GatewayConfig.
 func Validate(cfg *GatewayConfig) error {
 	if cfg == nil {
@@ -413,6 +479,10 @@ func Validate(cfg *GatewayConfig) error {
 		if err := validateCircuitBreaker(&cfg.Resilience.CircuitBreaker, "resilience.circuit_breaker"); err != nil {
 			return err
 		}
+	}
+
+	if err := ValidateChaos(&cfg.Chaos); err != nil {
+		return err
 	}
 
 	if err := ValidateTelemetry(&cfg.Telemetry); err != nil {

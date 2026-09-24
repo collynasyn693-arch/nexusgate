@@ -65,9 +65,17 @@ func (c *HalfOpenController) Allow() bool {
 }
 
 // ReleaseInflight decrements the active canary concurrency counter.
-// Must be called upon request completion to prevent permanent Half-Open lockup.
+// Bounded at zero with CAS to eliminate any negative underflow hazard.
 func (c *HalfOpenController) ReleaseInflight() {
-	c.inflight.Add(-1)
+	for {
+		cur := c.inflight.Load()
+		if cur <= 0 {
+			return
+		}
+		if c.inflight.CompareAndSwap(cur, cur-1) {
+			return
+		}
+	}
 }
 
 // RecordSuccess records a successful canary trial response.
@@ -122,8 +130,9 @@ func (c *HalfOpenController) RecordResult(success bool) {
 	}
 }
 
-// Reset clears canary trial counters and the failure flag for the next Half-Open cycle.
+// Reset clears canary trial counters, inflight concurrency, and the failure flag for the next cycle.
 func (c *HalfOpenController) Reset() {
+	c.inflight.Store(0)
 	c.consecutiveSuccess.Store(0)
 	c.hasFailed.Store(false)
 }

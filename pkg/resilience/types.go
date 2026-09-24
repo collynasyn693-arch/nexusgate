@@ -119,6 +119,10 @@ type CircuitBreaker interface {
 	// On the hot path (StateClosed), this executes with sub-10ns latency and 0 heap allocations.
 	Allow() bool
 
+	// ReleaseInflight decrements the active canary concurrency counter if a request
+	// admitted during StateHalfOpen aborts before RecordSuccess/RecordFailure.
+	ReleaseInflight()
+
 	// RecordSuccess records a successful upstream response.
 	RecordSuccess()
 

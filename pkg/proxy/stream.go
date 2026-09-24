@@ -276,6 +276,14 @@ func ServeStream(w http.ResponseWriter, resp *http.Response, pool BufferPool, fl
 		buf = buf[:cap(buf)]
 	}
 
-	return io.CopyBuffer(dst, resp.Body, buf)
+	n, err := io.CopyBuffer(dst, resp.Body, buf)
+	if len(resp.Trailer) > 0 {
+		for k, vv := range resp.Trailer {
+			for _, v := range vv {
+				w.Header().Add(http.TrailerPrefix+k, v)
+			}
+		}
+	}
+	return n, err
 }
 
