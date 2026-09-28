@@ -72,33 +72,33 @@ func TestBinaryFrame_EndiannessAndWireLayout(t *testing.T) {
 		t.Fatalf("Encode failed: %v", err)
 	}
 
-	// Verify Magic bytes "NGTM" = 0x4E 0x47 0x54 0x4D
+	// Verify Magic bytes "NGTM" = 0x4E 0x47 0x54 0x4D (Magic bytes 0x4E, 0x47 at bytes 0..1)
 	expectedMagic := []byte{'N', 'G', 'T', 'M'}
 	if !bytes.Equal(buf[0:4], expectedMagic) {
 		t.Errorf("magic header mismatch: got %v, want %v", buf[0:4], expectedMagic)
 	}
 
-	// Version BigEndian 1 = 0x00 0x01
-	if buf[4] != 0x00 || buf[5] != 0x01 {
-		t.Errorf("version BigEndian mismatch: got %x %x", buf[4], buf[5])
+	// Version LittleEndian 1 = 0x01 0x00
+	if buf[4] != 0x01 || buf[5] != 0x00 {
+		t.Errorf("version LittleEndian mismatch: got %x %x", buf[4], buf[5])
 	}
 
-	// TimestampUnixNano BigEndian = 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
-	expectedTS := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	// TimestampUnixNano LittleEndian = 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01
+	expectedTS := []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01}
 	if !bytes.Equal(buf[8:16], expectedTS) {
-		t.Errorf("timestamp BigEndian mismatch: got %x, want %x", buf[8:16], expectedTS)
+		t.Errorf("timestamp LittleEndian mismatch: got %x, want %x", buf[8:16], expectedTS)
 	}
 
-	// TotalRequests BigEndian = 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88
-	expectedReqs := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+	// TotalRequests LittleEndian = 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11
+	expectedReqs := []byte{0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11}
 	if !bytes.Equal(buf[16:24], expectedReqs) {
-		t.Errorf("total requests BigEndian mismatch: got %x, want %x", buf[16:24], expectedReqs)
+		t.Errorf("total requests LittleEndian mismatch: got %x, want %x", buf[16:24], expectedReqs)
 	}
 
-	// ActiveConns BigEndian = 0x0A, 0x0B, 0x0C, 0x0D
-	expectedConns := []byte{0x0A, 0x0B, 0x0C, 0x0D}
+	// ActiveConns LittleEndian = 0x0D, 0x0C, 0x0B, 0x0A
+	expectedConns := []byte{0x0D, 0x0C, 0x0B, 0x0A}
 	if !bytes.Equal(buf[24:28], expectedConns) {
-		t.Errorf("active conns BigEndian mismatch: got %x, want %x", buf[24:28], expectedConns)
+		t.Errorf("active conns LittleEndian mismatch: got %x, want %x", buf[24:28], expectedConns)
 	}
 }
 
@@ -121,8 +121,8 @@ func TestBinaryFrame_UnsupportedVersion(t *testing.T) {
 	frame := BinaryFrame{Version: 1}
 	_ = frame.Encode(buf[:])
 
-	// Change version to 99
-	binary.BigEndian.PutUint16(buf[4:6], 99)
+	// Change version to 99 in LittleEndian
+	binary.LittleEndian.PutUint16(buf[4:6], 99)
 	var decoded BinaryFrame
 	err := decoded.Decode(buf[:])
 	if !errors.Is(err, ErrUnsupportedVersion) {

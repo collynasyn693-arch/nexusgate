@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"nexusgate/internal/platform"
 )
@@ -110,7 +111,7 @@ func (s *UDSServer) acceptLoop(l net.Listener) {
 			select {
 			case <-s.done:
 				return
-			default:
+			case <-time.After(5 * time.Millisecond):
 				continue
 			}
 		}

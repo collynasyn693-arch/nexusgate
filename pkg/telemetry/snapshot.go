@@ -120,28 +120,36 @@ type GatewaySnapshot struct {
 func (s *GatewaySnapshot) ToBinaryFrame() BinaryFrame {
 	rps1sMilli := uint32(0)
 	if s.RPS1s > 0 {
-		rps1sMilli = uint32(s.RPS1s * 1000.0)
+		milli := s.RPS1s * 1000.0
+		if milli > float64(^uint32(0)) {
+			rps1sMilli = ^uint32(0)
+		} else {
+			rps1sMilli = uint32(milli)
+		}
 	}
 
 	active := uint32(0)
 	if s.ActiveConnections > 0 {
-		active = uint32(s.ActiveConnections)
+		if s.ActiveConnections > int64(^uint32(0)) {
+			active = ^uint32(0)
+		} else {
+			active = uint32(s.ActiveConnections)
+		}
 	}
 
-	p50 := uint32(0)
-	if s.LatencyP50Us > 0 {
-		p50 = uint32(s.LatencyP50Us)
+	clampUint32 := func(v int64) uint32 {
+		if v <= 0 {
+			return 0
+		}
+		if v > int64(^uint32(0)) {
+			return ^uint32(0)
+		}
+		return uint32(v)
 	}
 
-	p90 := uint32(0)
-	if s.LatencyP90Us > 0 {
-		p90 = uint32(s.LatencyP90Us)
-	}
-
-	p99 := uint32(0)
-	if s.LatencyP99Us > 0 {
-		p99 = uint32(s.LatencyP99Us)
-	}
+	p50 := clampUint32(s.LatencyP50Us)
+	p90 := clampUint32(s.LatencyP90Us)
+	p99 := clampUint32(s.LatencyP99Us)
 
 	return BinaryFrame{
 		Version:           CurrentVersion,

@@ -109,8 +109,8 @@ func (d *IdleDetector) EnterSleep(doubleCheck func() bool) bool {
 		return false
 	}
 
-	// Post-CAS guard: re-check if work arrived or doubleCheck fails
-	if doubleCheck != nil && !doubleCheck() {
+	// Post-CAS guard: re-check if activity arrived during CAS or doubleCheck fails
+	if !d.ShouldSleep() || (doubleCheck != nil && !doubleCheck()) {
 		d.state.Store(IdleStateActive)
 		return false
 	}

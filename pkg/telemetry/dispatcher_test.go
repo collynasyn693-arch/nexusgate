@@ -179,15 +179,99 @@ func TestDispatcher_WriteTimeoutEviction(t *testing.T) {
 	defer cleanup()
 	_ = clientConn
 
+	if unixConn, ok := serverConn.(*net.UnixConn); ok {
+		_ = unixConn.SetWriteBuffer(1024)
+	}
+
 	d.Subscribe(serverConn)
 
-	for i := 0; i < 5000; i++ {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && d.SubscriberCount() > 0 {
 		d.Broadcast(BinaryFrame{
 			Version:   CurrentVersion,
 			FrameType: FrameTypeSnapshot,
 		})
+		time.Sleep(50 * time.Microsecond)
 	}
 
-	time.Sleep(100 * time.Millisecond)
-	t.Logf("Subscriber count after write timeout test: %d", d.SubscriberCount())
+	if count := d.SubscriberCount(); count != 0 {
+		t.Fatalf("expected stalled subscriber to be evicted after write timeout, got count=%d", count)
+	}
+}
+
+func TestDispatcher_ClientDisconnectEviction(t *testing.T) {
+	d := NewDispatcher(16, 50*time.Millisecond)
+	defer d.Close()
+
+	serverConn, clientConn, cleanup := createUDSConnPair(t, "disc")
+	defer cleanup()
+
+	d.Subscribe(serverConn)
+	if count := d.SubscriberCount(); count != 1 {
+		t.Fatalf("expected 1 subscriber, got %d", count)
+	}
+
+	// Abruptly close client socket
+	_ = clientConn.Close()
+
+	// Broadcast frames; pump will encounter write error (broken pipe) and evict
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) && d.SubscriberCount() > 0 {
+		d.Broadcast(BinaryFrame{
+			Version:   CurrentVersion,
+			FrameType: FrameTypeSnapshot,
+		})
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	if count := d.SubscriberCount(); count != 0 {
+		t.Fatalf("expected subscriber to be evicted after client disconnect, got count=%d", count)
+	}
+}
+
+func TestDispatcher_ConcurrentChurnAndBroadcast(t *testing.T) {
+	d := NewDispatcher(16, 50*time.Millisecond)
+	defer d.Close()
+
+	const numBroadcasters = 4
+	const framesPerBroadcaster = 1000
+	const numChurners = 4
+	const churnCycles = 50
+
+	var wg sync.WaitGroup
+
+	// Broadcasters
+	for b := 0; b < numBroadcasters; b++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < framesPerBroadcaster; i++ {
+				d.Broadcast(BinaryFrame{
+					Version:       CurrentVersion,
+					FrameType:     FrameTypeSnapshot,
+					TotalRequests: uint64(id*framesPerBroadcaster + i + 1),
+				})
+			}
+		}(b)
+	}
+
+	// Churners
+	for c := 0; c < numChurners; c++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < churnCycles; i++ {
+				sConn, cConn, cleanup := createUDSConnPair(t, fmt.Sprintf("churn_%d_%d", id, i))
+				d.Subscribe(sConn)
+				// Read any available frame non-blockingly
+				_ = cConn.SetReadDeadline(time.Now().Add(2 * time.Millisecond))
+				buf := make([]byte, BinaryFrameSize)
+				_, _ = cConn.Read(buf)
+				d.Unsubscribe(sConn)
+				cleanup()
+			}
+		}(c)
+	}
+
+	wg.Wait()
 }

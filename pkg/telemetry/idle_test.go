@@ -171,3 +171,19 @@ func TestIdleDetector_ConcurrentStress(t *testing.T) {
 		t.Fatalf("expected active state after close")
 	}
 }
+
+func TestIdleDetector_ActivityDuringSleepEntry(t *testing.T) {
+	timeout := 10 * time.Millisecond
+	d := NewIdleDetector(timeout)
+	time.Sleep(15 * time.Millisecond)
+
+	// Simulate activity arriving right as sleep is evaluated
+	d.OnActivity()
+	ok := d.EnterSleep(nil)
+	if ok {
+		t.Fatalf("expected EnterSleep to abort because activity occurred")
+	}
+	if d.IsSleeping() {
+		t.Fatalf("expected to remain active after recent activity")
+	}
+}

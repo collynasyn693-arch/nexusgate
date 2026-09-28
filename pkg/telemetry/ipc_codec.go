@@ -11,7 +11,7 @@ import (
 // BinaryFrame constants.
 const (
 	BinaryFrameSize    = 64
-	MagicHeader        = 0x4E47544D // "NGTM" in ASCII
+	MagicHeader        = 0x4D54474E // "NGTM" in LittleEndian: byte 0=0x4E ('N'), byte 1=0x47 ('G'), byte 2=0x54 ('T'), byte 3=0x4D ('M')
 	CurrentVersion     = 1
 	FrameTypeSnapshot  = 1
 	FrameTypeHeartbeat = 2
@@ -25,7 +25,7 @@ var (
 )
 
 // BinaryFrame represents a compact 64-byte IPC snapshot streamed over UDS to observatory clients.
-// All multi-byte numeric fields are serialized in BigEndian order.
+// All multi-byte numeric fields are serialized in LittleEndian order for zero-overhead ARM64 access.
 type BinaryFrame struct {
 	Version           uint16 // Frame wire format version (CurrentVersion = 1)
 	FrameType         uint16 // Type of frame (1 = Snapshot, 2 = Heartbeat)
@@ -50,24 +50,24 @@ func (f *BinaryFrame) Encode(dest []byte) error {
 		return ErrBufferTooShort
 	}
 
-	binary.BigEndian.PutUint32(dest[0:4], MagicHeader)
-	binary.BigEndian.PutUint16(dest[4:6], f.Version)
-	binary.BigEndian.PutUint16(dest[6:8], f.FrameType)
-	binary.BigEndian.PutUint64(dest[8:16], uint64(f.TimestampUnixNano))
-	binary.BigEndian.PutUint64(dest[16:24], f.TotalRequests)
-	binary.BigEndian.PutUint32(dest[24:28], f.ActiveConns)
-	binary.BigEndian.PutUint32(dest[28:32], f.RPS1s)
-	binary.BigEndian.PutUint32(dest[32:36], f.P50LatencyUs)
-	binary.BigEndian.PutUint32(dest[36:40], f.P90LatencyUs)
-	binary.BigEndian.PutUint32(dest[40:44], f.P99LatencyUs)
-	binary.BigEndian.PutUint32(dest[44:48], f.Status2xxCount)
-	binary.BigEndian.PutUint32(dest[48:52], f.Status3xxCount)
-	binary.BigEndian.PutUint32(dest[52:56], f.Status4xxCount)
-	binary.BigEndian.PutUint32(dest[56:60], f.Status5xxCount)
+	binary.LittleEndian.PutUint32(dest[0:4], MagicHeader)
+	binary.LittleEndian.PutUint16(dest[4:6], f.Version)
+	binary.LittleEndian.PutUint16(dest[6:8], f.FrameType)
+	binary.LittleEndian.PutUint64(dest[8:16], uint64(f.TimestampUnixNano))
+	binary.LittleEndian.PutUint64(dest[16:24], f.TotalRequests)
+	binary.LittleEndian.PutUint32(dest[24:28], f.ActiveConns)
+	binary.LittleEndian.PutUint32(dest[28:32], f.RPS1s)
+	binary.LittleEndian.PutUint32(dest[32:36], f.P50LatencyUs)
+	binary.LittleEndian.PutUint32(dest[36:40], f.P90LatencyUs)
+	binary.LittleEndian.PutUint32(dest[40:44], f.P99LatencyUs)
+	binary.LittleEndian.PutUint32(dest[44:48], f.Status2xxCount)
+	binary.LittleEndian.PutUint32(dest[48:52], f.Status3xxCount)
+	binary.LittleEndian.PutUint32(dest[52:56], f.Status4xxCount)
+	binary.LittleEndian.PutUint32(dest[56:60], f.Status5xxCount)
 
 	checksum := crc32.ChecksumIEEE(dest[0:60])
 	f.CRC32 = checksum
-	binary.BigEndian.PutUint32(dest[60:64], checksum)
+	binary.LittleEndian.PutUint32(dest[60:64], checksum)
 	return nil
 }
 
@@ -78,35 +78,35 @@ func (f *BinaryFrame) Decode(src []byte) error {
 		return ErrBufferTooShort
 	}
 
-	magic := binary.BigEndian.Uint32(src[0:4])
+	magic := binary.LittleEndian.Uint32(src[0:4])
 	if magic != MagicHeader {
 		return fmt.Errorf("%w: expected 0x%08X, got 0x%08X", ErrCorruptMagic, MagicHeader, magic)
 	}
 
-	version := binary.BigEndian.Uint16(src[4:6])
+	version := binary.LittleEndian.Uint16(src[4:6])
 	if version != CurrentVersion {
 		return fmt.Errorf("%w: supported %d, got %d", ErrUnsupportedVersion, CurrentVersion, version)
 	}
 
-	expectedCRC := binary.BigEndian.Uint32(src[60:64])
+	expectedCRC := binary.LittleEndian.Uint32(src[60:64])
 	actualCRC := crc32.ChecksumIEEE(src[0:60])
 	if expectedCRC != actualCRC {
 		return fmt.Errorf("%w: expected 0x%08X, got 0x%08X", ErrChecksumMismatch, expectedCRC, actualCRC)
 	}
 
 	f.Version = version
-	f.FrameType = binary.BigEndian.Uint16(src[6:8])
-	f.TimestampUnixNano = int64(binary.BigEndian.Uint64(src[8:16]))
-	f.TotalRequests = binary.BigEndian.Uint64(src[16:24])
-	f.ActiveConns = binary.BigEndian.Uint32(src[24:28])
-	f.RPS1s = binary.BigEndian.Uint32(src[28:32])
-	f.P50LatencyUs = binary.BigEndian.Uint32(src[32:36])
-	f.P90LatencyUs = binary.BigEndian.Uint32(src[36:40])
-	f.P99LatencyUs = binary.BigEndian.Uint32(src[40:44])
-	f.Status2xxCount = binary.BigEndian.Uint32(src[44:48])
-	f.Status3xxCount = binary.BigEndian.Uint32(src[48:52])
-	f.Status4xxCount = binary.BigEndian.Uint32(src[52:56])
-	f.Status5xxCount = binary.BigEndian.Uint32(src[56:60])
+	f.FrameType = binary.LittleEndian.Uint16(src[6:8])
+	f.TimestampUnixNano = int64(binary.LittleEndian.Uint64(src[8:16]))
+	f.TotalRequests = binary.LittleEndian.Uint64(src[16:24])
+	f.ActiveConns = binary.LittleEndian.Uint32(src[24:28])
+	f.RPS1s = binary.LittleEndian.Uint32(src[28:32])
+	f.P50LatencyUs = binary.LittleEndian.Uint32(src[32:36])
+	f.P90LatencyUs = binary.LittleEndian.Uint32(src[36:40])
+	f.P99LatencyUs = binary.LittleEndian.Uint32(src[40:44])
+	f.Status2xxCount = binary.LittleEndian.Uint32(src[44:48])
+	f.Status3xxCount = binary.LittleEndian.Uint32(src[48:52])
+	f.Status4xxCount = binary.LittleEndian.Uint32(src[52:56])
+	f.Status5xxCount = binary.LittleEndian.Uint32(src[56:60])
 	f.CRC32 = expectedCRC
 
 	return nil
