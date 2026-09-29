@@ -143,6 +143,6 @@ func ParseFlags(args []string) (map[string]string, []string) {
 
 // RegisterAllCommands registers all subcommands on the CLI application.
 func RegisterAllCommands(a *App) {
-	// Subcommands are registered here as they are implemented
+	RegisterValidateCommand(a)
 }
 
