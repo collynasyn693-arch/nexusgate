@@ -29,7 +29,7 @@
 *.test
 *.out
 *.exe
-nexusgate
+/nexusgate
 .DS_Store
 *.swp
 *~
