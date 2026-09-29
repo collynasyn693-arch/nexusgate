@@ -145,5 +145,6 @@ func ParseFlags(args []string) (map[string]string, []string) {
 func RegisterAllCommands(a *App) {
 	RegisterValidateCommand(a)
 	RegisterStartCommand(a)
+	RegisterAttachCommand(a)
 }
 
