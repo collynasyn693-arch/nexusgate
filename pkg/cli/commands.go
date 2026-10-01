@@ -148,5 +148,6 @@ func RegisterAllCommands(a *App) {
 	RegisterAttachCommand(a)
 	RegisterRunCommand(a)
 	RegisterReloadCommand(a)
+	RegisterDrainCommand(a)
 }
 
