@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -42,6 +43,14 @@ func (w *statusTrackingResponseWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+func (w *statusTrackingResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func (w *statusTrackingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return proxy.HijackConnection(w.ResponseWriter)
 }
 
 // BuildPipeline assembles the full middleware and proxy pipeline into an http.Handler.
