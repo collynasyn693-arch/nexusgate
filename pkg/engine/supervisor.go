@@ -86,10 +86,16 @@ func NewSupervisor(cfg *config.GatewayConfig, socketPath string) (*Supervisor, e
 
 	// Chaos engine
 	chaosCfg := chaos.Config{
-		Enabled:    cfg.Chaos.Enabled,
-		HeaderKey:  cfg.Chaos.HeaderKey,
-		MaxDelay:   cfg.Chaos.MaxDelay,
-		StrictMode: cfg.Chaos.StrictMode,
+		Enabled:             cfg.Chaos.Enabled,
+		AdminKey:            cfg.Chaos.AdminKey,
+		HeaderKey:           cfg.Chaos.HeaderKey,
+		AllowedSubnets:      cfg.Chaos.AllowedSubnets,
+		DefaultDelay:        cfg.Chaos.Delay,
+		DefaultFailureRate:  cfg.Chaos.FailureRate,
+		MaxDelay:            cfg.Chaos.MaxDelay,
+		MaxBodyBytes:        cfg.Chaos.MaxBodyBytes,
+		MaxConcurrentDelays: cfg.Chaos.MaxConcurrentDelays,
+		StrictMode:          cfg.Chaos.StrictMode,
 	}
 	chaosEng, err := chaos.NewEngine(chaosCfg, nil)
 	if err != nil {
