@@ -99,6 +99,11 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 		a.PrintHelp()
 		return nil
 	}
+	if subcmd == "-v" || subcmd == "--version" {
+		if cmd, ok := a.commands["version"]; ok {
+			return cmd.Run(ctx, args[1:])
+		}
+	}
 
 	cmd, ok := a.commands[subcmd]
 	if !ok {
@@ -149,5 +154,6 @@ func RegisterAllCommands(a *App) {
 	RegisterRunCommand(a)
 	RegisterReloadCommand(a)
 	RegisterDrainCommand(a)
+	RegisterVersionCommand(a)
 }
 
