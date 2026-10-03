@@ -54,6 +54,21 @@ func IsHopByHopHeader(key string) bool {
 	return ok
 }
 
+// standardHopByHopKeys contains pre-computed canonical MIME keys for RFC hop-by-hop headers,
+// eliminating repeated string allocations during per-request header sanitization.
+var standardHopByHopKeys = [...]string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Proxy-Connection",
+	"Te",
+	"Trailer",
+	"Trailers",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
 // RemoveHopByHopHeaders inspects the given HTTP headers and strips:
 // 1. All dynamic hop-by-hop headers declared as tokens in the 'Connection' header (RFC 7230 §6.1),
 //    except for protected framing/auth headers.
@@ -84,13 +99,22 @@ func RemoveHopByHopHeaders(h http.Header) {
 	}
 
 	// 2. Preserve 'TE: trailers' if requested; otherwise strip TE
-	te := h.Get("TE")
-	hasTrailers := strings.EqualFold(strings.TrimSpace(te), "trailers")
+	hasTrailers := false
+	if teVals, ok := h["Te"]; ok {
+		for _, val := range teVals {
+			if strings.EqualFold(strings.TrimSpace(val), "trailers") {
+				hasTrailers = true
+				break
+			}
+		}
+	} else if te := h.Get("TE"); strings.EqualFold(strings.TrimSpace(te), "trailers") {
+		hasTrailers = true
+	}
 
-	// 3. Strip all standard hop-by-hop headers
-	for hop := range hopByHopHeaders {
-		canonical := textproto.CanonicalMIMEHeaderKey(hop)
-		h.Del(canonical)
+	// 3. Strip all standard hop-by-hop headers using zero-alloc direct map deletion
+	for _, key := range standardHopByHopKeys {
+		delete(h, key)
+		h.Del(key)
 	}
 
 	// Restore TE: trailers if it was present
