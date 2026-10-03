@@ -3,7 +3,6 @@ package proxy
 import (
 	"net"
 	"net/http"
-	"net/textproto"
 	"strings"
 )
 
@@ -40,12 +39,20 @@ var protectedHeaders = map[string]struct{}{
 }
 
 // isProtectedHeader reports whether a header cannot be stripped by dynamic Connection tokens.
-func isProtectedHeader(lowerToken string) bool {
-	if strings.HasPrefix(lowerToken, "x-forwarded-") {
+func isProtectedHeader(token string) bool {
+	if len(token) >= 12 && strings.EqualFold(token[:12], "x-forwarded-") {
 		return true
 	}
-	_, ok := protectedHeaders[lowerToken]
-	return ok
+	for _, p := range [...]string{
+		"host", "content-length", "content-type", "authorization",
+		"range", "if-range", "date", "x-forwarded-for", "x-forwarded-proto",
+		"x-forwarded-host", "x-real-ip",
+	} {
+		if strings.EqualFold(token, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsHopByHopHeader reports whether the given header key is a standard hop-by-hop header.
@@ -79,47 +86,58 @@ func RemoveHopByHopHeaders(h http.Header) {
 		return
 	}
 
-	// 1. Parse and delete dynamic headers declared in the Connection header.
+	// 1. Parse and delete dynamic headers declared in the Connection header without heap allocations.
 	if connVals, ok := h["Connection"]; ok {
 		for _, val := range connVals {
-			for _, token := range strings.Split(val, ",") {
-				token = strings.TrimSpace(token)
+			for len(val) > 0 {
+				var token string
+				comma := strings.IndexByte(val, ',')
+				if comma >= 0 {
+					token = strings.TrimSpace(val[:comma])
+					val = val[comma+1:]
+				} else {
+					token = strings.TrimSpace(val)
+					val = ""
+				}
 				if token == "" {
 					continue
 				}
-				lowerToken := strings.ToLower(token)
-				// Security guard: protect core framing and authentication headers
-				if isProtectedHeader(lowerToken) {
+				// Skip standard non-header connection tokens
+				if strings.EqualFold(token, "close") || strings.EqualFold(token, "keep-alive") || strings.EqualFold(token, "upgrade") {
 					continue
 				}
-				canonical := textproto.CanonicalMIMEHeaderKey(token)
-				h.Del(canonical)
+				// Security guard: protect core framing and authentication headers
+				if isProtectedHeader(token) {
+					continue
+				}
+				h.Del(token)
 			}
 		}
 	}
 
 	// 2. Preserve 'TE: trailers' if requested; otherwise strip TE
 	hasTrailers := false
-	if teVals, ok := h["Te"]; ok {
+	teVals, hasTe := h["Te"]
+	if !hasTe {
+		teVals, hasTe = h["TE"]
+	}
+	if hasTe {
 		for _, val := range teVals {
 			if strings.EqualFold(strings.TrimSpace(val), "trailers") {
 				hasTrailers = true
 				break
 			}
 		}
-	} else if te := h.Get("TE"); strings.EqualFold(strings.TrimSpace(te), "trailers") {
-		hasTrailers = true
 	}
 
 	// 3. Strip all standard hop-by-hop headers using zero-alloc direct map deletion
 	for _, key := range standardHopByHopKeys {
 		delete(h, key)
-		h.Del(key)
 	}
 
 	// Restore TE: trailers if it was present
 	if hasTrailers {
-		h.Set("TE", "trailers")
+		h["Te"] = []string{"trailers"}
 	}
 }
 
