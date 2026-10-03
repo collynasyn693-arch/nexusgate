@@ -42,6 +42,7 @@ func RunLoad(ctx context.Context, cfg LoadConfig) (*LoadResult, error) {
 		IdleConnTimeout:     30 * time.Second,
 		DisableKeepAlives:   cfg.DisableKeepAlive,
 	}
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   10 * time.Second,
