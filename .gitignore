@@ -24,6 +24,7 @@
 !/CHANGELOG.md
 !/RELEASE_NOTES.md
 !/nexusgate.example.yaml
+!/Makefile
 
 # Ignore build binaries and test artifacts
 *.test
