@@ -1,0 +1,28 @@
+version: "1.0"
+
+listener:
+  host: "127.0.0.1"
+  port: 8888
+  read_timeout: 10s
+  write_timeout: 10s
+  idle_timeout: 30s
+  read_header_timeout: 3s
+
+routes:
+  - id: "battery-core-route"
+    path: "/api/core"
+    methods: ["GET", "POST"]
+    upstream_id: "core-pool"
+
+upstreams:
+  - id: "core-pool"
+    algorithm: "round_robin"
+    targets:
+      - url: "http://127.0.0.1:9001"
+        weight: 1
+
+telemetry:
+  enabled: true
+  sampling_rate: 0.1
+  buffer_capacity: 1024
+  idle_timeout: 1500ms

@@ -1,0 +1,78 @@
+version: "1.0"
+
+listener:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  read_header_timeout: 5s
+
+routes:
+  - id: "auth-route"
+    path: "/api/auth"
+    methods: ["GET", "POST"]
+    upstream_id: "auth-pool"
+    timeout: 5s
+
+  - id: "users-route"
+    path: "/api/v1/users"
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    upstream_id: "users-pool"
+    timeout: 10s
+
+  - id: "orders-route"
+    path: "/api/v1/orders"
+    methods: ["GET", "POST"]
+    upstream_id: "orders-pool"
+    timeout: 10s
+
+  - id: "ws-notifications"
+    path: "/ws/notifications"
+    methods: ["GET"]
+    upstream_id: "ws-pool"
+
+upstreams:
+  - id: "auth-pool"
+    algorithm: "round_robin"
+    targets:
+      - url: "http://127.0.0.1:3001"
+        weight: 1
+
+  - id: "users-pool"
+    algorithm: "swwr"
+    targets:
+      - url: "http://127.0.0.1:3002"
+        weight: 3
+      - url: "http://127.0.0.1:3003"
+        weight: 1
+
+  - id: "orders-pool"
+    algorithm: "peak_ewma"
+    targets:
+      - url: "http://127.0.0.1:4001"
+        weight: 1
+      - url: "http://127.0.0.1:4002"
+        weight: 1
+
+  - id: "ws-pool"
+    algorithm: "round_robin"
+    targets:
+      - url: "http://127.0.0.1:5001"
+        weight: 1
+
+resilience:
+  circuit_breaker:
+    enabled: true
+    failure_rate_threshold: 0.5
+    consecutive_failures: 5
+    min_requests: 10
+    reset_timeout: 15s
+    half_open_max_requests: 3
+
+telemetry:
+  enabled: true
+  sampling_rate: 1.0
+  buffer_capacity: 4096
+  retention_window: 10m
+  idle_timeout: 3s

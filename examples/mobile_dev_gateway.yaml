@@ -1,0 +1,57 @@
+version: "1.0"
+
+listener:
+  host: "127.0.0.1"
+  port: 8090
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+
+routes:
+  - id: "node-frontend"
+    path: "/app"
+    methods: ["GET"]
+    upstream_id: "node-app"
+
+  - id: "python-backend"
+    path: "/api/fastapi"
+    methods: ["GET", "POST", "PUT"]
+    upstream_id: "fastapi-app"
+
+  - id: "mock-offline-profile"
+    path: "/api/offline/profile"
+    methods: ["GET"]
+    mock:
+      enabled: true
+      status_code: 200
+      headers:
+        Content-Type: "application/json"
+      body: '{"user_id":10464,"username":"termux_developer","offline_mode":true}'
+
+upstreams:
+  - id: "node-app"
+    algorithm: "round_robin"
+    targets:
+      - url: "http://127.0.0.1:3000"
+        weight: 1
+
+  - id: "fastapi-app"
+    algorithm: "round_robin"
+    targets:
+      - url: "http://127.0.0.1:8000"
+        weight: 1
+
+chaos:
+  enabled: true
+  admin_key: "dev-chaos-token"
+  delay: 150ms
+  jitter: 50ms
+  failure_rate: 0.05
+  status_code: 503
+  allowed_subnets:
+    - "127.0.0.1/32"
+    - "::1/128"
+
+telemetry:
+  enabled: true
+  idle_timeout: 5s
