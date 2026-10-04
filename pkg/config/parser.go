@@ -96,6 +96,7 @@ var durationKeys = map[string]bool{
 	"idle_sleep_timeout":  true,
 	"snapshot_interval":   true,
 	"delay":               true,
+	"max_delay":           true,
 }
 
 // normalizeDurations walks an unmarshaled AST and converts string durations ("5s", "100ms") to int64 nanoseconds.

@@ -45,13 +45,11 @@ chaos:
   enabled: true
   admin_key: "dev-chaos-token"
   delay: 150ms
-  jitter: 50ms
+  max_delay: 300ms
   failure_rate: 0.05
-  status_code: 503
   allowed_subnets:
     - "127.0.0.1/32"
     - "::1/128"
 
 telemetry:
-  enabled: true
-  idle_timeout: 5s
+  idle_sleep_timeout: 5s

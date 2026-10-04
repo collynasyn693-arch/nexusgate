@@ -71,8 +71,6 @@ resilience:
     half_open_max_requests: 3
 
 telemetry:
-  enabled: true
-  sampling_rate: 1.0
-  buffer_capacity: 4096
-  retention_window: 10m
-  idle_timeout: 3s
+  ring_buffer_size: 4096
+  idle_sleep_timeout: 3s
+  snapshot_interval: 1s
