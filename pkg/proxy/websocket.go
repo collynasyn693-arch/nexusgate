@@ -251,4 +251,3 @@ func ServeWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, poo
 	PumpWebSocket(clientConn, clientRw, upstreamConn, upstreamReader, pool)
 	return nil
 }
-

@@ -6,9 +6,9 @@ import (
 
 // Tripper evaluates failure thresholds and orchestrates transitioning the FSM to StateOpen.
 // Supports dual tripping policies:
-// 1. Consecutive Failures: Trips when N successive requests fail.
-// 2. Percentage Failure Rate: Trips when failure percentage exceeds threshold within
-//    the active sliding window, gated by a minimum request volume (MinRequests).
+//  1. Consecutive Failures: Trips when N successive requests fail.
+//  2. Percentage Failure Rate: Trips when failure percentage exceeds threshold within
+//     the active sliding window, gated by a minimum request volume (MinRequests).
 type Tripper struct {
 	fsm                 *BreakerFSM
 	window              *SlidingWindow

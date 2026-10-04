@@ -9,12 +9,12 @@ import (
 // counts consecutive successful trials to restore StateClosed, and immediately
 // re-trips back to StateOpen upon any single trial failure.
 type HalfOpenController struct {
-	fsm                 *BreakerFSM
-	window              *SlidingWindow
-	cfg                 Config
-	inflight            atomic.Int64 // Active concurrent trial requests in flight
-	consecutiveSuccess  atomic.Int64 // Cumulative consecutive successful trials in this cycle
-	hasFailed           atomic.Bool  // Marked true if any trial in this cycle failed
+	fsm                *BreakerFSM
+	window             *SlidingWindow
+	cfg                Config
+	inflight           atomic.Int64 // Active concurrent trial requests in flight
+	consecutiveSuccess atomic.Int64 // Cumulative consecutive successful trials in this cycle
+	hasFailed          atomic.Bool  // Marked true if any trial in this cycle failed
 }
 
 // NewHalfOpenController constructs an initialized HalfOpenController.

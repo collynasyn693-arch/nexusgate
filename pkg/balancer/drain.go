@@ -9,11 +9,11 @@ import (
 // and waits gracefully for all in-flight connections to bleed down to zero or until the timeout expires.
 //
 // Architectural Resilience Invariants (Auditor-certified):
-// 1. Immediate Short-Circuit: If inflight connections are already zero, Drain signals drainDone
-//    immediately and returns nil without waiting for the timeout.
-// 2. Slip-Free Protection: AcquireConn re-verifies the draining flag post-increment, guaranteeing
-//    no new requests slip in concurrently after drain begins.
-// 3. Idempotent Signaling: drainDone is closed exactly once via sync.Once, eliminating double-close panics.
+//  1. Immediate Short-Circuit: If inflight connections are already zero, Drain signals drainDone
+//     immediately and returns nil without waiting for the timeout.
+//  2. Slip-Free Protection: AcquireConn re-verifies the draining flag post-increment, guaranteeing
+//     no new requests slip in concurrently after drain begins.
+//  3. Idempotent Signaling: drainDone is closed exactly once via sync.Once, eliminating double-close panics.
 func (b *Backend) Drain(ctx context.Context, timeout time.Duration) error {
 	b.drainMu.Lock()
 	defer b.drainMu.Unlock()

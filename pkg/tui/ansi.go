@@ -8,14 +8,14 @@ import (
 
 // Standard ANSI control escape sequences.
 const (
-	EscSeqReset         = "\033[0m"
-	EscSeqHideCursor    = "\033[?25l"
-	EscSeqShowCursor    = "\033[?25h"
+	EscSeqReset          = "\033[0m"
+	EscSeqHideCursor     = "\033[?25l"
+	EscSeqShowCursor     = "\033[?25h"
 	EscSeqEnterAltScreen = "\033[?1049h"
 	EscSeqExitAltScreen  = "\033[?1049l"
-	EscSeqClearScreen   = "\033[2J"
-	EscSeqClearLine     = "\033[2K"
-	EscSeqCursorHome    = "\033[H"
+	EscSeqClearScreen    = "\033[2J"
+	EscSeqClearLine      = "\033[2K"
+	EscSeqCursorHome     = "\033[H"
 )
 
 // MoveCursor returns the escape sequence to move cursor to 0-indexed (x, y).

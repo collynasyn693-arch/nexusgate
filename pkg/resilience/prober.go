@@ -27,11 +27,11 @@ const (
 // ProberConfig defines configuration options for active health checking.
 type ProberConfig struct {
 	Type               ProberType    `json:"type" yaml:"type"`
-	Target             string        `json:"target" yaml:"target"`       // e.g. "http://127.0.0.1:8081/healthz" or "127.0.0.1:8081"
-	Path               string        `json:"path" yaml:"path"`           // Health check path, defaults to "/healthz"
-	Interval           time.Duration `json:"interval" yaml:"interval"`   // Base interval between checks
-	JitterRatio        float64       `json:"jitter_ratio" yaml:"jitter_ratio"` // Interval jitter ratio (default: 0.20 for +/- 20%)
-	Timeout            time.Duration `json:"timeout" yaml:"timeout"`     // Maximum duration for a single probe
+	Target             string        `json:"target" yaml:"target"`                           // e.g. "http://127.0.0.1:8081/healthz" or "127.0.0.1:8081"
+	Path               string        `json:"path" yaml:"path"`                               // Health check path, defaults to "/healthz"
+	Interval           time.Duration `json:"interval" yaml:"interval"`                       // Base interval between checks
+	JitterRatio        float64       `json:"jitter_ratio" yaml:"jitter_ratio"`               // Interval jitter ratio (default: 0.20 for +/- 20%)
+	Timeout            time.Duration `json:"timeout" yaml:"timeout"`                         // Maximum duration for a single probe
 	HealthyThreshold   int           `json:"healthy_threshold" yaml:"healthy_threshold"`     // Consecutive successes to mark healthy
 	UnhealthyThreshold int           `json:"unhealthy_threshold" yaml:"unhealthy_threshold"` // Consecutive failures to mark unhealthy
 }

@@ -212,4 +212,3 @@ func TestMutateForwardedHeaders(t *testing.T) {
 		t.Errorf("expected X-Forwarded-Proto = https, got %q", got)
 	}
 }
-

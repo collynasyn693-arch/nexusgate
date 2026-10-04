@@ -31,11 +31,11 @@ func init() {
 // RingBuffer is a lock-free, cache-line padded Multi-Producer Single-Consumer (MPSC)
 // circular buffer optimized for ARM64 multi-core and big.LITTLE architectures.
 type RingBuffer struct {
-	head    atomic.Uint64
-	_pad0   [56]byte // Cache line padding isolating head cursor
+	head  atomic.Uint64
+	_pad0 [56]byte // Cache line padding isolating head cursor
 
-	tail    atomic.Uint64
-	_pad1   [56]byte // Cache line padding isolating tail cursor
+	tail  atomic.Uint64
+	_pad1 [56]byte // Cache line padding isolating tail cursor
 
 	dropped atomic.Uint64
 	_pad2   [56]byte // Cache line padding isolating dropped counter

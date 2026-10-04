@@ -15,12 +15,12 @@ func TestStaticRouteLookup(t *testing.T) {
 	hHealth := dummyHandler("health")
 
 	routes := map[string]Handler{
-		"/":              hRoot,
-		"/api":           hApi,
-		"/api/v1/user":   hUser,
-		"/api/v1/users":  hUsers,
-		"/api/v1/posts":  hPosts,
-		"/healthz":       hHealth,
+		"/":             hRoot,
+		"/api":          hApi,
+		"/api/v1/user":  hUser,
+		"/api/v1/users": hUsers,
+		"/api/v1/posts": hPosts,
+		"/healthz":      hHealth,
 	}
 
 	for path, handler := range routes {

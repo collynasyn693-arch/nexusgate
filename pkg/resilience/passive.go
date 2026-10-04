@@ -84,9 +84,9 @@ func (t *PassiveTap) RecordResponse(reqCtx context.Context, statusCode int, err 
 
 // PassiveTransport wraps an existing http.RoundTripper with passive circuit breaker tapping.
 type PassiveTransport struct {
-	transport  http.RoundTripper
-	tap        *PassiveTap
-	fallback   http.Handler
+	transport http.RoundTripper
+	tap       *PassiveTap
+	fallback  http.Handler
 }
 
 // NewPassiveTransport wraps an upstream round-tripper with circuit breaker enforcement.

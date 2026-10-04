@@ -34,9 +34,9 @@ const (
 
 // Operational boundary defaults.
 const (
-	DefaultMaxDelay             = 30 * time.Second
-	DefaultMaxBodyBytes         = 64 * 1024 // 64 KB memory clamp
-	DefaultMaxConcurrentDelays  = 128
+	DefaultMaxDelay            = 30 * time.Second
+	DefaultMaxBodyBytes        = 64 * 1024 // 64 KB memory clamp
+	DefaultMaxConcurrentDelays = 128
 )
 
 type contextKey string

@@ -11,11 +11,11 @@ import (
 
 // LoadConfig configures the load generator harness parameters.
 type LoadConfig struct {
-	TargetURL      string
-	Concurrency    int
-	TotalRequests  int64
-	Duration       time.Duration
-	Headers        map[string]string
+	TargetURL        string
+	Concurrency      int
+	TotalRequests    int64
+	Duration         time.Duration
+	Headers          map[string]string
 	DisableKeepAlive bool
 }
 

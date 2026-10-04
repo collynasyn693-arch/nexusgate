@@ -51,10 +51,10 @@ type mockProber struct {
 	stopped atomic.Bool
 }
 
-func (m *mockProber) Target() string                   { return m.target }
-func (m *mockProber) IsHealthy() bool                  { return !m.stopped.Load() }
-func (m *mockProber) Start(ctx context.Context) error  { return nil }
-func (m *mockProber) Stop()                            { m.stopped.Store(true) }
+func (m *mockProber) Target() string                      { return m.target }
+func (m *mockProber) IsHealthy() bool                     { return !m.stopped.Load() }
+func (m *mockProber) Start(ctx context.Context) error     { return nil }
+func (m *mockProber) Stop()                               { m.stopped.Store(true) }
 func (m *mockProber) CheckOnce(ctx context.Context) error { return nil }
 
 func TestRegistry_SweepOrphanedBreakers(t *testing.T) {

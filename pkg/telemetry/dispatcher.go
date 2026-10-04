@@ -14,11 +14,11 @@ const (
 
 // clientSubscriber represents an active UDS client attached to the telemetry stream.
 type clientSubscriber struct {
-	conn         net.Conn
-	ch           chan [BinaryFrameSize]byte
-	dropped      atomic.Uint64
-	done         chan struct{}
-	closeOnce    sync.Once
+	conn      net.Conn
+	ch        chan [BinaryFrameSize]byte
+	dropped   atomic.Uint64
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // Dispatcher manages fan-out broadcast of telemetry frames to multiple connected UDS subscribers.

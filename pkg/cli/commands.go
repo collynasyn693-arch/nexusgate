@@ -156,4 +156,3 @@ func RegisterAllCommands(a *App) {
 	RegisterDrainCommand(a)
 	RegisterVersionCommand(a)
 }
-

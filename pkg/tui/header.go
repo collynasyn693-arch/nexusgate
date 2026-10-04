@@ -14,7 +14,7 @@ type HeaderWidget struct {
 	CurrentRPS      float64
 	Goroutines      int
 	AllocBytes      uint64
-	BatteryPct      int  // -1 if unknown
+	BatteryPct      int // -1 if unknown
 	BatteryCharging bool
 	Draining        bool
 	Muted           bool

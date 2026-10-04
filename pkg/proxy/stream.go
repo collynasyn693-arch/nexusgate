@@ -286,4 +286,3 @@ func ServeStream(w http.ResponseWriter, resp *http.Response, pool BufferPool, fl
 	}
 	return n, err
 }
-

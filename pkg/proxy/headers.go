@@ -77,10 +77,10 @@ var standardHopByHopKeys = [...]string{
 }
 
 // RemoveHopByHopHeaders inspects the given HTTP headers and strips:
-// 1. All dynamic hop-by-hop headers declared as tokens in the 'Connection' header (RFC 7230 §6.1),
-//    except for protected framing/auth headers.
-// 2. Standard hop-by-hop headers (Connection, Keep-Alive, Proxy-Authenticate, etc.).
-// 3. The 'TE' header is stripped unless its value is exactly 'trailers' (RFC 7230 §4.3 gRPC compatibility).
+//  1. All dynamic hop-by-hop headers declared as tokens in the 'Connection' header (RFC 7230 §6.1),
+//     except for protected framing/auth headers.
+//  2. Standard hop-by-hop headers (Connection, Keep-Alive, Proxy-Authenticate, etc.).
+//  3. The 'TE' header is stripped unless its value is exactly 'trailers' (RFC 7230 §4.3 gRPC compatibility).
 func RemoveHopByHopHeaders(h http.Header) {
 	if h == nil {
 		return

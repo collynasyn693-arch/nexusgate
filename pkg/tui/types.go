@@ -14,15 +14,15 @@ type Color struct {
 
 // Predefined ANSI 16 colors.
 var (
-	ColorDefault = Color{}
-	ColorBlack   = Color{ANSI: 0, IsANSI: true}
-	ColorRed     = Color{ANSI: 1, IsANSI: true}
-	ColorGreen   = Color{ANSI: 2, IsANSI: true}
-	ColorYellow  = Color{ANSI: 3, IsANSI: true}
-	ColorBlue    = Color{ANSI: 4, IsANSI: true}
-	ColorMagenta = Color{ANSI: 5, IsANSI: true}
-	ColorCyan    = Color{ANSI: 6, IsANSI: true}
-	ColorWhite   = Color{ANSI: 7, IsANSI: true}
+	ColorDefault       = Color{}
+	ColorBlack         = Color{ANSI: 0, IsANSI: true}
+	ColorRed           = Color{ANSI: 1, IsANSI: true}
+	ColorGreen         = Color{ANSI: 2, IsANSI: true}
+	ColorYellow        = Color{ANSI: 3, IsANSI: true}
+	ColorBlue          = Color{ANSI: 4, IsANSI: true}
+	ColorMagenta       = Color{ANSI: 5, IsANSI: true}
+	ColorCyan          = Color{ANSI: 6, IsANSI: true}
+	ColorWhite         = Color{ANSI: 7, IsANSI: true}
 	ColorBrightBlack   = Color{ANSI: 8, IsANSI: true}
 	ColorBrightRed     = Color{ANSI: 9, IsANSI: true}
 	ColorBrightGreen   = Color{ANSI: 10, IsANSI: true}

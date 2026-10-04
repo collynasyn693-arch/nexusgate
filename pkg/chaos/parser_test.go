@@ -22,11 +22,11 @@ func TestParseQueryParams_EmptyAndNormal(t *testing.T) {
 
 func TestParseQueryParams_Delay(t *testing.T) {
 	tests := []struct {
-		name      string
-		query     string
-		maxDelay  time.Duration
-		expected  time.Duration
-		expectOk  bool
+		name     string
+		query    string
+		maxDelay time.Duration
+		expected time.Duration
+		expectOk bool
 	}{
 		{
 			name:     "valid ms delay",

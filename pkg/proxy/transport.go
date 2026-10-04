@@ -42,9 +42,9 @@ type TransportOptions struct {
 }
 
 // DefaultTransportOptions provides battle-tested defaults optimized for Android Termux ARM64:
-// - Keep-Alive at 30s to keep mobile radio active during bursts without excessive battery drain.
-// - DisableCompression: true to pass compressed bytes directly to client without decompressing in memory,
-//   preserving real-time SSE chunk latency and saving ARM64 CPU cycles.
+//   - Keep-Alive at 30s to keep mobile radio active during bursts without excessive battery drain.
+//   - DisableCompression: true to pass compressed bytes directly to client without decompressing in memory,
+//     preserving real-time SSE chunk latency and saving ARM64 CPU cycles.
 var DefaultTransportOptions = TransportOptions{
 	DialTimeout:           10 * time.Second,
 	KeepAlive:             30 * time.Second,

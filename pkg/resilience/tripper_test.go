@@ -85,7 +85,7 @@ func TestTripper_PercentageFailureRate(t *testing.T) {
 
 	// Record 2 failures: total=12, fail=6 (rate = 6/12 = 50% >= 50%).
 	// The 6th failure reaches 50% threshold and must trip the circuit.
-	tripper.RecordFailure() // fail=5 (5/11 = 45.4%)
+	tripper.RecordFailure()            // fail=5 (5/11 = 45.4%)
 	tripped := tripper.RecordFailure() // fail=6 (6/12 = 50.0%)
 	if !tripped {
 		t.Fatalf("expected circuit to trip when reaching 50%% error rate at 12 requests")
